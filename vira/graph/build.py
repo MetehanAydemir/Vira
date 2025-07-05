@@ -9,6 +9,7 @@ from vira.graph.nodes.process_input import process_input_node
 from vira.graph.nodes.handle_omega import handle_omega_node
 from vira.graph.nodes.intent_classifier import intent_classifier_node
 from vira.graph.nodes.retrieve_memory import retrieve_memory_node
+from vira.graph.nodes.context_refiner_node import context_refiner_node
 from vira.graph.nodes.prepare_prompt import prepare_prompt_node
 from vira.graph.nodes.generate_response import generate_response_node
 from vira.graph.nodes.save_memory import save_memory_node
@@ -31,6 +32,7 @@ workflow.add_node("process_input", process_input_node)
 workflow.add_node("intent_classifier", intent_classifier_node)
 workflow.add_node("handle_omega", handle_omega_node)
 workflow.add_node("retrieve_memory", retrieve_memory_node)
+workflow.add_node("context_refiner", context_refiner_node)
 workflow.add_node("prepare_prompt", prepare_prompt_node)
 workflow.add_node("generate_response", generate_response_node)
 workflow.add_node("save_memory", save_memory_node)
@@ -53,7 +55,8 @@ workflow.add_conditional_edges(
 )
 
 # Standart sohbet akışı
-workflow.add_edge("retrieve_memory", "prepare_prompt")
+workflow.add_edge("retrieve_memory", "context_refiner")
+workflow.add_edge("context_refiner", "prepare_prompt")
 workflow.add_edge("prepare_prompt", "generate_response")
 workflow.add_edge("generate_response", "save_memory")
 
