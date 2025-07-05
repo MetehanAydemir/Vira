@@ -1,0 +1,27 @@
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Azure OpenAI Settings
+AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
+AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION")
+AZURE_OPENAI_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME")
+
+# Custom Chat API Settings
+CUSTOM_CHAT_API_KEY = os.getenv("CUSTOM_CHAT_API_KEY")
+CUSTOM_CHAT_API_ENDPOINT = os.getenv("CUSTOM_CHAT_API_ENDPOINT")
+CUSTOM_CHAT_API_VERSION = os.getenv("CUSTOM_CHAT_API_VERSION")
+
+# PostgreSQL Settings
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+POSTGRES_USER = os.getenv("POSTGRES_USER", "vira")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "sifre")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "vira_db")
+
+# Application Settings
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
