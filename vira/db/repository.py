@@ -59,7 +59,7 @@ class MemoryRepository:
                         .where(LongTermMemory.id == memory.id)
                     )
                     similarity = 1 - distance
-                    result.append((memory.content, float(similarity)))
+                    result.append((memory.content, float(similarity), memory.created_at))
 
             logger.info(f"Retrieved {len(result)} similar memories for user {user_id}")
             return result
