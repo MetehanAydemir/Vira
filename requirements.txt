@@ -1,6 +1,7 @@
 # LangGraph ve LangChain
 langgraph==0.2.14
-
+emoji==2.10.1
+langdetect==1.0.9
 # Veritabanı
 sqlalchemy==2.0.28
 pgvector==0.2.5
