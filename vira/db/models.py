@@ -52,6 +52,7 @@ class Interaction(Base):
     message = Column(Text)
     response = Column(Text)
     created_at = Column(DateTime, server_default=func.now())
+    intent_type = Column(String, nullable=True)
 
     def __repr__(self):
         return f"<Interaction(id={self.id}, user_id={self.user_id})>"

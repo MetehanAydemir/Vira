@@ -1,5 +1,5 @@
 import yaml
-from openai import AzureOpenAI
+from openai import OpenAI  # <<< DEĞİŞİKLİK: AzureOpenAI yerine OpenAI kullanılıyor
 from typing import Dict, Any
 import os
 
@@ -9,18 +9,19 @@ from vira.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# --- Yardımcı Sınıflar ---
 
-def get_openai_client():
-    """Azure OpenAI istemcisini başlatır."""
-    return AzureOpenAI(
-        api_key=settings.AZURE_OPENAI_API_KEY,
-        api_version=settings.AZURE_OPENAI_API_VERSION,
-        azure_endpoint=settings.AZURE_OPENAI_ENDPOINT
+# --- DEĞİŞİKLİK: Yardımcı fonksiyon OpenRouter istemcisini kullanacak şekilde güncellendi ---
+def get_custom_chat_client() -> OpenAI:
+    """OpenRouter gibi özel bir OpenAI uyumlu API için istemci başlatır."""
+    return OpenAI(
+        api_key=settings.CUSTOM_CHAT_API_KEY,
+        base_url=settings.CUSTOM_CHAT_API_ENDPOINT,
     )
+
 
 class OmegaProtocolHelper:
     """YAML dosyasından protokol verilerini okumak için yardımcı sınıf."""
+
     def __init__(self):
         self.protocol_data = self._load_protocol()
 
@@ -49,42 +50,41 @@ class OmegaProtocolHelper:
             logger.error(f"Protokol bilgisi alınırken hata oluştu: {e}")
             return ""
 
+
 # --- LangGraph Düğümü ---
 
 def generate_response_node(state: ViraState) -> Dict[str, Any]:
     """
-    Hazırlanan prompt ile Azure OpenAI API'sini çağırır ve bir yanıt üretir.
+    Hazırlanan prompt ile OpenRouter API'sini çağırır ve bir yanıt üretir.
     """
     logger.info("--- Düğüm: generate_response_node ---")
-    
+
     messages = state["messages"]
     if not messages:
         return {"response": "Üzgünüm, işleyecek bir mesaj bulamadım."}
 
     try:
-        client = get_openai_client()
-        model_name = settings.AZURE_OPENAI_DEPLOYMENT_NAME
-        
+        # --- DEĞİŞİKLİK: İstemci ve model adı OpenRouter ayarlarından alınıyor ---
+        client = get_custom_chat_client()
+        model_name = settings.CUSTOM_CHAT_MODEL_NAME
+
         logger.debug(f"Kullanılan model: {model_name}")
-        
-        # LangChain mesaj formatını OpenAI formatına dönüştür
-        # LangChain'in "human" tipini OpenAI'nin "user" tipine çevir
+
         openai_messages = []
         for msg in messages:
             role = "user" if msg.type == "human" else msg.type
             openai_messages.append({"role": role, "content": msg.content})
-        
+
         logger.debug(f"OpenAI mesajları: {openai_messages}")
-        
+
         response_stream = client.chat.completions.create(
             model=model_name,
             messages=openai_messages,
-            stream=False # Şimdilik streaming kapalı
+            stream=False
         )
-        
+
         ai_response = response_stream.choices[0].message.content
 
-        # Protokol bilgilerini yanıta ekle
         protocol = OmegaProtocolHelper()
         protocol_info = protocol.get_summary_info()
         if protocol_info:
@@ -92,7 +92,7 @@ def generate_response_node(state: ViraState) -> Dict[str, Any]:
 
         logger.info(f"Yanıt üretildi: {ai_response[:50]}...")
         return {"response": ai_response.strip()}
-    
+
     except Exception as e:
         logger.error(f"Yanıt üretilirken hata oluştu: {e}", exc_info=True)
         return {"response": "Üzgünüm, bir hata oluştu ve yanıt üretemedim."}
