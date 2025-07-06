@@ -1,22 +1,59 @@
-# Vira - LangGraph Tabanlı AI Asistanı
+# Vira - LangGraph Tabanlı Yapay Zeka Asistanı
 
-Vira, uzun süreli hafıza özelliklerine sahip, Azure OpenAI ve PostgreSQL (pgvector) kullanan, çok arayüzlü bir AI asistanıdır. LangGraph tabanlı mimarisi sayesinde karmaşık düşünce akışları oluşturabilir.
+Vira, uzun süreli hafıza ve dinamik kişilik özellikleriyle donatılmış, LangGraph tabanlı modern bir yapay zeka asistanıdır. Azure OpenAI ve PostgreSQL (pgvector) altyapısını kullanarak çok katmanlı hafıza yönetimi ve uyarlanabilir kişilik sistemi sunar.
 
 ![Vira](https://via.placeholder.com/800x400?text=Vira+AI+Assistant)
 
-## Özellikler
+## Temel Özellikler
 
-- **LangGraph Tabanlı İş Akışı**: Modüler ve genişletilebilir yapay zeka iş akışı
-- **Uzun Süreli Hafıza**: PostgreSQL ve pgvector kullanarak vektör gömmeleriyle hafıza depolama ve benzerlik araması
-- **Çoklu Arayüz Seçenekleri**:
-  - FastAPI REST API
-  - Web arayüzü (Gradio)
-  - Dashboard (Streamlit)
-  - Komut satırı arayüzü (CLI)
-- **Azure OpenAI Entegrasyonu**: GPT-4o-mini ve text-embedding-3-small modelleri
-- **Hafıza Yönetimi**: Konuşma geçmişini akıllıca saklama ve ilgili anıları geri getirme
-- **Yapılandırılabilir Kişilik**: Farklı kullanım senaryolarına uyarlanabilir kişilik özellikleri
-- **Docker Desteği**: Kolay dağıtım ve ölçeklendirme
+- **LangGraph Tabanlı Akış Mimarisi**: Modüler düğümler ve koşullu yönlendirmeler içeren esnek yapı.
+- **İki Katmanlı Hafıza Sistemi**:
+  - **Uzun Süreli Hafıza**: pgvector ile benzerlik araması yapılarak derin anılar saklanır.
+  - **Kısa Süreli Hafıza**: Aktif oturumlardaki güncel konuşma bağlamı korunur.
+- **Dinamik Kişilik Sistemi**: Kullanıcı etkileşimleriyle evrimleşen, beş boyutlu kişilik vektörü.
+- **Yanıt Kalite Değerlendirmesi**: Her yanıtın dil modeli tarafından öz değerlendirilmesi.
+- **Çoklu Arayüz Seçenekleri**: FastAPI, Gradio, Streamlit ve CLI desteği.
+- **Azure OpenAI Entegrasyonu**: GPT-4o ve text-embedding-3-small modelleriyle çalışma.
+- **Konfigüre Edilebilir Önem Değerlendirme**: Anıların uzun süreli hafızaya kaydedilme kriterlerinin özelleştirilebilmesi.
+
+## Mimari
+
+### LangGraph Akış Mimarisi
+
+Vira, aşağıdaki adımları izleyen modüler bir LangGraph akış mimarisi kullanır:
+
+1. **process_input**: Kullanıcı girdisini işler ve ön analiz yapar.
+2. **intent_classifier**: Kullanıcının amacını ve talebini sınıflandırır.
+3. **handle_omega/retrieve_memory**: Özel komut veya hafıza geri çağırma yoluna karar verir.
+4. **context_refiner**: Bellek ve bağlamı yapılandırır ve zenginleştirir.
+5. **prepare_prompt**: Dil modeli için optimize edilmiş sistem mesajı ve giriş hazırlar.
+6. **generate_response**: Yanıt üretir ve yanıt kalitesini değerlendirir.
+7. **save_memory**: Etkileşimin önemine göre hafızaya kaydeder.
+
+### Hafıza Sistemi
+
+Vira'nın iki katmanlı hafıza sistemi:
+
+- **Uzun Süreli Hafıza**: 
+  - pgvector ile vektör benzerliği araması.
+  - İlgili anıların seçici olarak saklanması.
+  - Önem skoru hesaplanarak anı filtreleme.
+  
+- **Kısa Süreli Hafıza**:
+  - Aktif oturumdaki son konuşmaları kronolojik sırayla saklama.
+  - Hızlı erişim için oturum ID'si ile ilişkilendirme.
+
+### Kişilik Sistemi
+
+Vira'nın dinamik kişilik sistemi, beş boyutlu bir vektörle temsil edilir:
+
+- **Empati**: Kullanıcının duygularını ve bakış açısını anlama yeteneği.
+- **Merak**: Yeni bilgiler öğrenme veya derinleşme isteği.
+- **Kararlılık**: Kendinden emin ve doğrudan yanıt verme kapasitesi.
+- **Mizah**: Esprili veya eğlenceli unsurlar içerme eğilimi.
+- **Şüphecilik**: Eleştirel düşünce ve sorgulama seviyesi.
+
+Bu vektör, her etkileşimde LLM tarafından değerlendirilerek küçük adımlarla güncellenir ve kişilik evriminin geçmişi veritabanında saklanır.
 
 ## Kurulum
 
@@ -25,193 +62,145 @@ Vira, uzun süreli hafıza özelliklerine sahip, Azure OpenAI ve PostgreSQL (pgv
 - Python 3.10+
 - PostgreSQL 14+ (pgvector eklentisi ile)
 - Azure OpenAI API erişimi
-- Docker ve Docker Compose (isteğe bağlı)
+- Docker ve Docker Compose (opsiyonel)
 
 ### Ortam Kurulumu
 
+
 1. Depoyu klonlayın:
-   ```
-   git clone https://github.com/yourusername/vira.git
-   cd vira
-   ```
+git clone https://github.com/yourusername/vira.git cd vira
+
 
 2. Sanal ortam oluşturun ve bağımlılıkları yükleyin:
-   ```
-   python -m venv venv
-   source venv/bin/activate  # Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
+python -m venv venv source venv/bin/activate # Windows: venv\Scripts\activate pip install -r requirements.txt
+
 
 3. `.env` dosyası oluşturun (örnek):
-   ```
-   # Azure OpenAI
-   AZURE_OPENAI_API_KEY=your_api_key
-   AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
-   AZURE_OPENAI_API_VERSION=2023-12-01-preview
-   AZURE_OPENAI_DEPLOYMENT_NAME=your-gpt4-deployment
-   AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME=your-embedding-deployment
+Azure OpenAI
+AZURE_OPENAI_API_KEY=your_api_key AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/ AZURE_OPENAI_API_VERSION=2023-12-01-preview AZURE_OPENAI_DEPLOYMENT_NAME=your-gpt4-deployment AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME=your-embedding-deployment
 
-   # Database
-   DB_HOST=localhost
-   DB_PORT=5432
-   DB_NAME=vira
-   DB_USER=postgres
-   DB_PASSWORD=password
+Database
+POSTGRES_HOST=localhost POSTGRES_PORT=5432 POSTGRES_DB=vira_db POSTGRES_USER=vira POSTGRES_PASSWORD=sifre
 
-   # Application
-   LOG_LEVEL=INFO
-   ```
+Application
+LOG_LEVEL=INFO MEMORY_SIMILARITY_THRESHOLD=0.7
+
 
 ### Veritabanı Kurulumu
 
 PostgreSQL veritabanı ve pgvector eklentisini kurun:
+### Veritabanı Kurulumu
 
-```bash
+PostgreSQL veritabanı ve pgvector eklentisini kurun:
+
+
 # Docker ile
 docker-compose up -d postgres
 
 # Veya manuel olarak
-psql -U postgres -c "CREATE DATABASE vira;"
-psql -U postgres -d vira -c "CREATE EXTENSION IF NOT EXISTS vector;"
-```
-
-Veritabanı şemasını oluşturmak için:
-
-```bash
-# Uygulama başlatıldığında otomatik yapılır veya
-python -m vira.db.engine --init
-```
-
-## Kullanım
-
-### API Sunucusu
-
-REST API'yi başlatmak için:
-
-```bash
-python -m vira.api
-# veya
-uvicorn vira.api:api --host 0.0.0.0 --port 8000 --reload
-```
-
-API dökümantasyonuna erişmek için: http://localhost:8000/docs
-
-### Web Arayüzü (Gradio)
-
-Gradio web arayüzünü başlatmak için:
-
-```bash
-python -m vira.gradio_app
-```
-
-Arayüze erişmek için: http://localhost:7860
-
-### Dashboard (Streamlit)
-
-Streamlit dashboard'unu başlatmak için:
-
-```bash
-python -m vira.streamlit_app
-```
-
-Dashboard'a erişmek için: http://localhost:8501
-
-### Komut Satırı Arayüzü
-
-CLI üzerinden Vira ile etkileşim için:
-
-```bash
-python -m vira.cli
-```
-
-### Docker ile Çalıştırma
-
-Tüm servisleri Docker ile başlatmak için:
-
-```bash
-docker-compose up -d
-```
-
-## Mimari
-
-Vira'nın mimari yapısı şu bileşenlerden oluşur:
-
-```
-vira/
-├── graph/                 # LangGraph tabanlı akış
-│   ├── build.py           # Graf yapısının oluşturulması
-│   ├── state.py           # Graf durumu tanımları
-│   └── nodes/             # Graf düğümleri
-├── db/                    # Veritabanı işlemleri
-│   ├── engine.py          # Veritabanı bağlantı motoru
-│   ├── models.py          # SQLAlchemy modelleri
-│   └── repository.py      # Veritabanı erişim katmanı
-├── services/              # Dış servis entegrasyonları
-│   ├── azure_openai.py    # Azure OpenAI entegrasyonu
-│   ├── embedding.py       # Gömme (embedding) servisi
-│   └── custom_chat.py     # Özelleştirilmiş sohbet servisi
-├── config/                # Yapılandırma
-│   └── settings.py        # Uygulama ayarları
-├── utils/                 # Yardımcı araçlar
-│   └── logger.py          # Loglama yardımcıları
-├── api.py                 # FastAPI arayüzü
-├── gradio_app.py          # Gradio web arayüzü
-├── streamlit_app.py       # Streamlit dashboard
-└── cli.py                 # Komut satırı arayüzü
-```
-
-### LangGraph Akışı
-
-Vira, şu adımları izleyen bir LangGraph akışı kullanır:
-
-1. **process_input**: Kullanıcı girdisini işler ve analiz eder
-2. **retrieve_memory**: İlgili hafıza öğelerini vektör benzerliğine göre getirir
-3. **prepare_prompt**: Yanıt için gerekli içeriği hazırlar
-4. **generate_response**: Azure OpenAI kullanarak yanıt üretir
-5. **save_memory**: Etkileşimi uzun süreli hafızaya kaydeder
-
-## Geliştirme
-
-### Yeni Node Ekleme
-
-LangGraph akışına yeni bir düğüm (node) eklemek için:
-
-1. `vira/graph/nodes/` altında yeni bir Python modülü oluşturun
-2. Düğüm fonksiyonunu tanımlayın
-3. `vira/graph/build.py` içinde düğümü akışa ekleyin
-
-### Test Etme
-
-Testleri çalıştırmak için:
-
-```bash
-pytest
-```
-
-## Ortam Değişkenleri
-
-| Değişken | Açıklama | Örnek Değer |
-|----------|----------|------------|
-| AZURE_OPENAI_API_KEY | Azure OpenAI API anahtarı | sk-... |
-| AZURE_OPENAI_ENDPOINT | Azure OpenAI endpoint URL | https://your-resource.openai.azure.com/ |
-| AZURE_OPENAI_API_VERSION | API versiyonu | 2023-12-01-preview |
-| AZURE_OPENAI_DEPLOYMENT_NAME | Chat modeli deployment adı | gpt-4o-mini |
-| AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME | Embedding modeli deployment adı | text-embedding-3-small |
-| DB_HOST | PostgreSQL veritabanı sunucusu | localhost |
-| DB_PORT | PostgreSQL port | 5432 |
-| DB_NAME | Veritabanı adı | vira |
-| DB_USER | Veritabanı kullanıcısı | postgres |
-| DB_PASSWORD | Veritabanı şifresi | password |
-| LOG_LEVEL | Loglama seviyesi | INFO |
-
-## Lisans
-
-Bu proje [MIT Lisansı](LICENSE) altında lisanslanmıştır.
-
-## Katkıda Bulunma
-
-Katkıda bulunmak için lütfen bir Issue açın veya bir Pull Request gönderin.
-
----
+psql -U postgres -c "CREATE DATABASE vira_db;"
+psql -U postgres -d vira_db -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
 Vira - Yol arkadaşı, alet değil.
+
+
+Şimdi de akış şemasını içeren dosyayı hazırlayalım:
+
+
+# Vira LangGraph Akış Şeması
+
+Aşağıda, Vira AI Asistanı'nın LangGraph tabanlı akışının detaylı bir şeması bulunmaktadır. Bu şema, giriş işlemeden hafızaya kaydetmeye kadar tüm adımları ve karar noktalarını göstermektedir.
+
+graph TD
+    A[Kullanıcı Girdisi] --> B[process_input_node]
+    B -->|Girdi analizi| C[intent_classifier_node]
+    C -->|Amaç belirleme| D{is_omega_command?}
+
+    D -->|Evet| E[handle_omega_node]
+    D -->|Hayır| F[retrieve_memory_node]
+
+    F --> |Hafıza çağırma| G[context_refiner_node]
+    G --> |Bağlam zenginleştirme| H[prepare_prompt_node]
+    H --> |Prompt hazırlama| I[generate_response_node]
+
+    subgraph LLM İşlemi
+        I --> I1[Chain-of-Thought ekle]
+        I1 --> I2[LLM çağrısı yap]
+        I2 --> I3[Yanıt kalitesini değerlendir]
+        I3 --> I4[Kişilik vektörünü güncelle]
+        I4 --> I5[Önem skorunu hesapla]
+    end
+
+    I --> J[save_memory_node]
+
+    subgraph Hafıza Yönetimi
+        J --> J1{should_promote_to_long_term?}
+        J1 -->|Evet| J2[Uzun Süreli Hafızaya Kaydet]
+        J1 -->|Hayır| J3[Kısa Süreli Hafızaya Kaydet]
+    end
+
+    E --> K[END]
+    J --> K[END]
+
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style K fill:#bbf,stroke:#333,stroke-width:2px
+    style I fill:#bfb,stroke:#333,stroke-width:2px
+    style J fill:#fbf,stroke:#333,stroke-width:2px
+Vira Akış Adımları Detaylı Açıklaması
+1. Giriş İşleme (Input Processing)
+process_input_node: Kullanıcı girdisi alınır ve temel analiz yapılır (dil tespiti, kelime sayısı, temel duygu analizi)
+intent_classifier_node: Kullanıcının niyeti sınıflandırılır (soru, komut, sohbet, vb.)
+
+2. Yol Ayrımı (Decision Point)
+is_omega_command?: Özel komut mu normal sohbet mi kararı verilir
+Eğer özel komutsa: handle_omega_node çalışır
+Değilse: Normal sohbet akışına devam edilir
+
+3. Hafıza ve Bağlam İşleme (Memory & Context Processing)
+retrieve_memory_node: İki tür hafıza çekilir
+Uzun Süreli Hafıza: pgvector ile benzerlik araması
+Kısa Süreli Hafıza: Son konuşmalar
+context_refiner_node: Hafıza ve bağlam birleştirilir, LLM için optimize edilir
+
+4. Yanıt Üretimi (Response Generation)
+prepare_prompt_node: LLM için sistem talimatları ve girdiler hazırlanır
+generate_response_node: Yanıt üretilir
+Chain-of-Thought ile düşünce adımları eklenir
+LLM çağrısı yapılır
+Yanıt kalitesi değerlendirilir (alaka, doğruluk, yardımcılık)
+Kişilik vektörü güncellenir
+Önem skoru hesaplanır
+
+5. Hafıza Yönetimi (Memory Management)
+save_memory_node: Etkileşim hafızaya kaydedilir
+Önem skoruna göre uzun/kısa süreli hafızaya kaydedilir
+Kişilik günlüğü güncellenir
+Kişilik Sistemi Alt Akışı
+graph TD
+    A[Yanıt Üretildi] --> B[evaluate_response]
+    B --> C[LLM Değerlendirmesi]
+    C --> D[Kişilik Skorları]
+
+    D --> E[calculate_delta]
+    E --> F[update_vector]
+    F --> G[save_personality_vector]
+
+    G --> H[Veritabanı Güncellemesi]
+
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style D fill:#bfb,stroke:#333,stroke-width:2px
+    style H fill:#bbf,stroke:#333,stroke-width:2px
+
+Kişilik Değerlendirme Adımları
+evaluate_response: Vira'nın yanıtı analiz edilir
+Empati, merak, kararlılık, mizah ve şüphecilik boyutları puanlanır
+calculate_delta: Mevcut kişilik vektörü ile yeni değerlendirme arasındaki fark hesaplanır
+update_vector: Kişilik vektörü küçük adımlarla güncellenir
+save_personality_vector: Güncellenmiş vektör ve değişim günlüğü veritabanına kaydedilir
+Bu akış şeması, Vira'nın çalışma prensibi ve bileşenlerin nasıl etkileşime girdiğini göstermek için tasarlanmıştır. LangGraph mimarisi sayesinde akış modüler ve genişletilebilirdir.
+
+
+Bu iki dosya ile projenin hem detaylı bir açıklamasını hem de görsel bir akış şemasını sunmuş oluyorum. README.md dosyası, projenin genel özelliklerini, kurulumunu ve kullanımını anlatırken, FLOW_DIAGRAM.md dosyası özellikle LangGraph akışının nasıl çalıştığını mermaid diyagramları ile görselleştiriyor. Bu şekilde projeyle ilgilenenlere hem yüksek seviye bir bakış hem de derinlemesine teknik ayrıntılar sunulmuş oluyor.
+
+
+

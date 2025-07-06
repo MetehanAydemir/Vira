@@ -1,12 +1,19 @@
+import json
+from typing import Dict, List, Tuple
 import numpy as np
-from sqlalchemy import text
+from sqlalchemy import select, desc
 from contextlib import contextmanager
-from vira.db.engine import db_session
-from vira.db.models import LongTermMemory, Interaction, ShortTermMemory
-from vira.utils.logger import get_logger
-from sqlalchemy import text, select, and_, desc
-from typing import List, Tuple
 from datetime import datetime
+
+from vira.db.engine import db_session
+from vira.db.models import (
+    LongTermMemory,
+    Interaction,
+    ShortTermMemory,
+    PersonalityVector,
+    PersonalityJournal
+)
+from vira.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -24,7 +31,7 @@ class MemoryRepository:
 
                 memory = LongTermMemory(
                     content=content,
-                    metadatas=metadatas,  # Changed from metadata to meta_data
+                    metadatas=metadatas,
                     embedding=embedding.tolist()
                 )
                 session.add(memory)
@@ -127,4 +134,128 @@ class MemoryRepository:
 
         except Exception as e:
             logger.error(f"Failed to retrieve recent conversations: {e}")
+            return []
+
+
+class PersonalityRepository:
+    """Kişilik vektörlerini yönetmek için SQLAlchemy repository sınıfı."""
+
+    def get_personality_vector(self, user_id: str) -> Dict[str, float]:
+        """
+        Kullanıcının en güncel kişilik vektörünü alır.
+
+        Args:
+            user_id: Kullanıcı kimliği
+
+        Returns:
+            Kişilik vektörü (boyut-değer çiftleri)
+        """
+        try:
+            with db_session() as session:
+                # En son eklenen kişilik vektörünü al
+                personality = session.scalars(
+                    select(PersonalityVector)
+                    .filter(PersonalityVector.user_id == user_id)
+                    .order_by(desc(PersonalityVector.created_at))
+                    .limit(1)
+                ).first()
+
+                if personality:
+                    return personality.vector
+
+                # Kullanıcı için kayıt yoksa varsayılan vektörü döndür
+                return {
+                    "empathy": 0.5,
+                    "curiosity": 0.5,
+                    "assertiveness": 0.5,
+                    "humour": 0.5,
+                    "scepticism": 0.5
+                }
+
+        except Exception as e:
+            logger.error(f"Kişilik vektörü alınırken hata: {e}")
+            return {}
+
+    def save_personality_vector(self, user_id: str, vector: Dict[str, float],
+                                old_vector: Dict[str, float] = None,
+                                delta: Dict[str, float] = None,
+                                reason: str = None) -> bool:
+        """
+        Kullanıcının kişilik vektörünü kaydeder ve değişim günlüğü oluşturur.
+
+        Args:
+            user_id: Kullanıcı kimliği
+            vector: Yeni kişilik vektörü
+            old_vector: Önceki kişilik vektörü (isteğe bağlı)
+            delta: Değişim değerleri (isteğe bağlı)
+            reason: Değişim nedeni (isteğe bağlı)
+
+        Returns:
+            İşlemin başarılı olup olmadığı
+        """
+        try:
+            with db_session() as session:
+                # Yeni kişilik vektörünü oluştur
+                new_vector = PersonalityVector(
+                    user_id=user_id,
+                    vector=vector
+                )
+                session.add(new_vector)
+                session.flush()  # ID'yi almak için flush et
+
+                # Değişim günlüğü oluştur (eğer eski vektör ve delta belirtilmişse)
+                if old_vector and delta:
+                    journal_entry = PersonalityJournal(
+                        user_id=user_id,
+                        vector_id=new_vector.id,
+                        old_vector=old_vector,
+                        new_vector=vector,
+                        delta=delta,
+                        reason=reason or "Scheduled update"
+                    )
+                    session.add(journal_entry)
+
+                # Session context manager commit işlemini yapacak
+                logger.info(f"Kişilik vektörü kaydedildi: {user_id}")
+                return True
+
+        except Exception as e:
+            logger.error(f"Kişilik vektörü kaydedilirken hata: {e}")
+            return False
+
+    def get_personality_history(self, user_id: str, limit: int = 10) -> List[Dict]:
+        """
+        Kullanıcının kişilik vektörü değişim geçmişini alır.
+
+        Args:
+            user_id: Kullanıcı kimliği
+            limit: Getirilecek maksimum kayıt sayısı
+
+        Returns:
+            Kişilik değişim kayıtları listesi
+        """
+        try:
+            with db_session() as session:
+                journals = session.scalars(
+                    select(PersonalityJournal)
+                    .filter(PersonalityJournal.user_id == user_id)
+                    .order_by(desc(PersonalityJournal.created_at))
+                    .limit(limit)
+                ).all()
+
+                history = []
+                for journal in journals:
+                    history.append({
+                        "timestamp": journal.created_at,
+                        "old_vector": journal.old_vector,
+                        "new_vector": journal.new_vector,
+                        "delta": journal.delta,
+                        "reason": journal.reason
+                    })
+
+                logger.info(f"Retrieved {len(history)} personality history entries for user {user_id}")
+                return history
+
+        except Exception as e:
+            logger.error(f"Failed to retrieve personality history: {e}")
             return []
