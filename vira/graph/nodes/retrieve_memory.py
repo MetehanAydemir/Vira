@@ -101,6 +101,11 @@ def retrieve_memory_node(state: ViraState) -> ViraState:
                 if similarity >= threshold:
                     formatted_date = created_date.strftime("%d/%m/%Y %H:%M")
                     memory_context += f'{i}. "{content.strip()}" (Benzerlik: {similarity * 100:.1f}%, Tarih: {formatted_date})\n'
+                    logger.info(f"Memory #{i}:")
+                    logger.info(f"  İçerik: {content.strip()}")
+                    logger.info(f"  Benzerlik: {similarity * 100:.2f}%")
+                    logger.info(f"  Tarih: {created_date.strftime('%d/%m/%Y %H:%M')}")
+                    logger.info("---")
         else:
             logger.info("İlgili anı bulunamadı.")
 
