@@ -219,6 +219,9 @@ def prepare_prompt_node(state: ViraState) -> ViraState:
         SystemMessage(content=system_message.strip()),
         HumanMessage(content=state.get("original_message", ""))
     ]
+    # 👉 Chain-of-Thought (CoT) talimatını enjekte et, gerekiyorsa
+    if state['processed_input'].get("intent", False) == 'question':
+        messages = inject_cot_instructions(messages)
 
     # Token sayısını hesapla (isteğe bağlı)
     _count_tokens(system_message, state)
@@ -337,3 +340,24 @@ def _count_tokens(message: str, state: ViraState) -> None:
         state["system_message_token_count"] = token_count
     except ImportError:
         logger.warning("tiktoken kütüphanesi bulunamadı, token sayısı hesaplanamadı.")
+
+def inject_cot_instructions(messages: List) -> List:
+    """
+    Chain-of-Thought talimatını mevcut mesaj listesine ekler.
+
+    Args:
+        messages: LLM'e gönderilecek mesaj listesi
+
+    Returns:
+        CoT talimatı eklenmiş mesaj listesi
+    """
+    # Sistem mesajının sonuna CoT talimatı ekle
+    if messages and isinstance(messages[0], SystemMessage):
+        cot_instruction = "\n\nYanıt verirken lütfen şu adımları izle:\n" + \
+                          "1. Önce birkaç düşünce adımı ile konuyu anlamlandır\n" + \
+                          "2. İlgili bilgileri organize et\n" + \
+                          "3. Net ve duyarlı bir yanıt oluştur"
+
+        messages[0].content = messages[0].content + cot_instruction
+
+    return messages

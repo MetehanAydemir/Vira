@@ -1,14 +1,12 @@
-#!/usr/bin/env python3
-"""
-Intent Classifier - Kullanıcı niyetini belirleyen hibrit (Regex + LLM) düğüm
-"""
 import re
 from typing import Dict, Any, List
+from vira.graph.state import ViraState
 
 # OpenAI istemcisi için gerekli importlar
 from openai import OpenAI
 from vira.config import settings
 from vira.utils.logger import get_logger
+from vira.utils.llm_client import call_chat_model
 
 logger = get_logger(__name__)
 
@@ -41,14 +39,6 @@ INTENT_PATTERNS = {
 }
 
 
-def get_custom_chat_client() -> OpenAI:
-    """OpenRouter gibi özel bir OpenAI uyumlu API için istemci başlatır."""
-    return OpenAI(
-        api_key=settings.CUSTOM_CHAT_API_KEY,
-        base_url=settings.CUSTOM_CHAT_API_ENDPOINT,
-    )
-
-
 def call_llm_for_intent(message: str, history: List[Dict[str, str]]) -> str:
     """
     Belirsiz durumlar için niyeti belirlemek üzere LLM'i çağırır.
@@ -56,8 +46,6 @@ def call_llm_for_intent(message: str, history: List[Dict[str, str]]) -> str:
     logger.debug("Regex ile niyet belirlenemedi, LLM'e başvuruluyor...")
 
     try:
-        client = get_custom_chat_client()
-
         history_str = "\n".join(
             [f"{msg.get('role', 'user').capitalize()}: {msg.get('content', '')}" for msg in history[-4:]])
 
@@ -74,18 +62,21 @@ Olası Niyetler: {', '.join(VALID_INTENTS)}
 
 Görevin, yukarıdaki listeden en uygun niyet türünü seçmek ve SADECE o niyetin adını döndürmektir. Örneğin: question
 """
-        response = client.chat.completions.create(
-            model=settings.CUSTOM_CHAT_MODEL_NAME,
-            messages=[
-                {"role": "system",
-                 "content": "Sen, kullanıcı mesajlarını belirli kategorilere ayıran bir niyet sınıflandırma uzmanısın. Yanıtın sadece tek bir kelime olmalı."},
-                {"role": "user", "content": prompt}
-            ],
+        # LLM istemcisini kullanarak çağrı yap
+        messages = [
+            {"role": "system",
+             "content": "Sen, kullanıcı mesajlarını belirli kategorilere ayıran bir niyet sınıflandırma uzmanısın. Yanıtın sadece tek bir kelime olmalı."},
+            {"role": "user", "content": prompt}
+        ]
+
+        response = call_chat_model(
+            messages=messages,
+            model="gpt-4o-mini",
             temperature=0.0,
-            # --- DÜZELTME: max_tokens değeri API'nin minimum gereksinimi olan 16'ya yükseltildi ---
-            max_tokens=20,
+            max_tokens=20
         )
-        llm_intent = response.choices[0].message.content.strip().lower()
+
+        llm_intent = response.strip().lower()
 
         if llm_intent in VALID_INTENTS:
             logger.info(f"LLM tarafından belirlenen niyet: {llm_intent}")
@@ -98,7 +89,6 @@ Görevin, yukarıdaki listeden en uygun niyet türünü seçmek ve SADECE o niye
         logger.error(f"LLM niyet sınıflandırma sırasında hata: {e}", exc_info=True)
         return IntentType.CHAT
 
-# --- (Dosyanın geri kalanı değişmedi) ---
 
 def classify_intent_hybrid(message: str, history: List[Dict[str, str]]) -> str:
     """
@@ -111,23 +101,48 @@ def classify_intent_hybrid(message: str, history: List[Dict[str, str]]) -> str:
     return call_llm_for_intent(message, history)
 
 
-def intent_classifier_node(state: Dict[str, Any]) -> Dict[str, Any]:
+def intent_classifier_node(state: ViraState) -> ViraState:
     """
     Graf durumunu alır, hibrit sınıflandırıcıyı kullanarak niyeti belirler ve durumu günceller.
+
+    Args:
+        state: ViraState tipinde graf durumu
+
+    Returns:
+        Güncellenmiş ViraState
     """
     logger.info("--- Düğüm: intent_classifier_node ---")
+
+    # Durumu kopyala (immutability için)
     new_state = state.copy()
+
+    # Gerekli verileri state'den al
     processed_input = new_state.get("processed_input", {})
-    message = processed_input.get("cleaned_message", "")
-    history = new_state.get("conversation_history", [])
+    message = new_state.get("original_message", "")
+
+    # Konuşma geçmişini messages'dan çıkar
+    history = []
+    if "messages" in new_state:
+        for msg in new_state["messages"]:
+            if hasattr(msg, "content") and hasattr(msg, "type"):
+                history.append({
+                    "role": msg.type,
+                    "content": msg.content
+                })
+
+    # Niyet belirleme
     if not message:
         logger.warning("Intent tespiti için mesaj bulunamadı. 'unknown' olarak ayarlandı.")
         intent = IntentType.UNKNOWN
     else:
         intent = classify_intent_hybrid(message, history)
+
+    # Processed input'u güncelle
     if "processed_input" not in new_state:
         new_state["processed_input"] = {}
+
     new_state["processed_input"]["intent"] = intent
     new_state["is_omega_command"] = (intent == IntentType.OMEGA)
+
     logger.info(f"Belirlenen niyet: {intent} (Mesaj: {message[:30]}...)")
     return new_state

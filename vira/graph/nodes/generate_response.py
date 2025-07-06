@@ -60,26 +60,7 @@ def refine_personality_sync(self, user_id: str, prompt: str, response: str) -> D
 PersonalityRefinementPipeline.refine_personality_sync = refine_personality_sync
 
 
-def inject_cot_instructions(messages: List) -> List:
-    """
-    Chain-of-Thought talimatını mevcut mesaj listesine ekler.
 
-    Args:
-        messages: LLM'e gönderilecek mesaj listesi
-
-    Returns:
-        CoT talimatı eklenmiş mesaj listesi
-    """
-    # Sistem mesajının sonuna CoT talimatı ekle
-    if messages and isinstance(messages[0], SystemMessage):
-        cot_instruction = "\n\nYanıt verirken lütfen şu adımları izle:\n" + \
-                          "1. Önce birkaç düşünce adımı ile konuyu anlamlandır\n" + \
-                          "2. İlgili bilgileri organize et\n" + \
-                          "3. Net ve duyarlı bir yanıt oluştur"
-
-        messages[0].content = messages[0].content + cot_instruction
-
-    return messages
 
 
 def evaluate_response_quality(prompt: str, response: str) -> Dict[str, float]:
@@ -152,13 +133,12 @@ def generate_response_node(state: ViraState) -> ViraState:
     # LLM çağrısı yap
     try:
         # Chain-of-Thought talimatı ekle
-        messages_with_cot = inject_cot_instructions(messages)
 
         # Token sayısı kontrolü
         start_time = time.time()
         # Gerçek LLM çağrısını yap
         response = call_chat_model(
-            messages=messages_with_cot,
+            messages=messages,
             model="o4-mini",  # Model adı env değişkeninden de alınabilir
             temperature=0.7,
             max_tokens=4000
