@@ -1,5 +1,5 @@
 import json
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any, Optional
 import numpy as np
 from sqlalchemy import select, desc
 from contextlib import contextmanager
@@ -11,42 +11,73 @@ from vira.db.models import (
     Interaction,
     ShortTermMemory,
     PersonalityVector,
-    PersonalityJournal
+    PersonalityJournal,
+    User
 )
 from vira.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+class UserRepository:
+    """Kullanıcı veritabanı işlemlerini yönetmek için repository sınıfı."""
+
+    def get_user_by_id(self, user_id: str) -> Optional[User]:
+        """Kullanıcıyı ID'ye göre getirir."""
+        with db_session() as session:
+            return session.query(User).filter(User.id == user_id).first()
+
+    def get_user_by_username(self, username: str) -> Dict[str, Any]:
+        """
+        Kullanıcıyı kullanıcı adına göre getirir.
+
+        Kullanıcı nesnesini değil, gerekli bilgileri içeren bir sözlük döndürür.
+        """
+        with db_session() as session:
+            user = session.query(User).filter(User.username == username).first()
+            if not user:
+                return None
+
+            return {
+                "id": user.id,
+                "username": user.username,
+                "hashed_password": user.hashed_password,
+                "email": user.email,
+                "created_at": user.created_at
+            }
+
+    def create_user(self, username: str, hashed_password: str, email: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Yeni bir kullanıcı oluşturur ve veritabanına kaydeder.
+
+        Kullanıcı nesnesini değil, gerekli bilgileri içeren bir sözlük döndürür.
+        Bu, session kapandıktan sonra detached instance hatalarını önler.
+        """
+        with db_session() as session:
+            # Kullanıcının zaten var olup olmadığını kontrol et (aynı session içinde)
+            existing_user = session.query(User).filter(User.username == username).first()
+            if existing_user:
+                raise ValueError("Bu kullanıcı adı zaten kullanımda")
+
+            # Yeni kullanıcı oluştur
+            new_user = User(
+                username=username,
+                hashed_password=hashed_password,
+                email=email
+            )
+            session.add(new_user)
+            session.commit()  # Değişiklikleri kaydet
+
+            # Session kapanmadan önce gerekli değerleri al ve bir sözlük olarak döndür
+            user_data = {
+                "id": new_user.id,
+                "username": new_user.username,
+                "created_at": new_user.created_at
+            }
+
+            return user_data
 
 class MemoryRepository:
     """Repository for memory operations using SQLAlchemy."""
-
-    def store_memory(self, user_id: str, content: str, embedding: np.ndarray):
-        """Store a memory entry with its embedding in the database."""
-        try:
-            # Use the context manager for session management
-            with db_session() as session:
-                # Store user_id in meta_data field
-                metadatas = {'user_id': user_id}
-
-                memory = LongTermMemory(
-                    content=content,
-                    metadatas=metadatas,
-                    embedding=embedding.tolist()
-                )
-                session.add(memory)
-                # No need to commit here, the context manager will do it
-
-                # Refresh to get the ID (still within the transaction)
-                session.flush()
-                memory_id = memory.id
-
-            # Session is now committed and closed
-            logger.info(f"Memory stored with ID: {memory_id}")
-            return memory_id
-        except Exception as e:
-            logger.error(f"Failed to store memory: {e}")
-            raise
 
     def retrieve_similar_memories(self, user_id: str, embedding: np.ndarray, top_k: int = 3):
         """Retrieve the most similar memories based on embedding similarity."""
@@ -136,7 +167,146 @@ class MemoryRepository:
             logger.error(f"Failed to retrieve recent conversations: {e}")
             return []
 
+    def store_interaction(self, user_id: str, message: str, response: str, intent_type: str = None) -> int:
+        """
+        Kullanıcı etkileşimini Interaction tablosuna kaydeder.
 
+        Args:
+            user_id: Kullanıcı kimliği
+            message: Kullanıcı mesajı
+            response: Sistem yanıtı
+            intent_type: Niyet türü (opsiyonel)
+
+        Returns:
+            int: Kaydedilen etkileşimin ID'si
+        """
+        try:
+            with db_session() as session:
+                interaction = Interaction(
+                    user_id=user_id,
+                    message=message,
+                    response=response,
+                    intent_type=intent_type
+                )
+                session.add(interaction)
+                session.flush()
+                interaction_id = interaction.id
+
+                logger.info(f"Interaction kaydedildi: {interaction_id}")
+                return interaction_id
+        except Exception as e:
+            logger.error(f"Interaction kaydedilirken hata: {e}")
+            raise
+
+    def store_short_term_memory(self, session_id: str, content: str) -> int:
+        """
+        Kısa süreli hafızaya kayıt yapar.
+
+        Args:
+            session_id: Oturum kimliği
+            content: Kaydedilecek içerik
+
+        Returns:
+            int: Kaydedilen hafıza girdisinin ID'si
+        """
+        try:
+            with db_session() as session:
+                memory = ShortTermMemory(
+                    session_id=session_id,
+                    content=content
+                )
+                session.add(memory)
+                session.flush()
+                memory_id = memory.id
+
+                logger.info(f"Short-term memory kaydedildi: {memory_id}")
+                return memory_id
+        except Exception as e:
+            logger.error(f"Short-term memory kaydedilirken hata: {e}")
+            raise
+
+    def store_long_term_memory(self, user_id: str, content: str, embedding: np.ndarray,
+                               metadatas: Dict[str, Any] = None) -> str:
+        """
+        Uzun süreli hafızaya kayıt yapar.
+
+        Args:
+            user_id: Kullanıcı kimliği
+            content: Kaydedilecek içerik
+            embedding: İçerik için vektör gömme
+            metadatas: Ek metadata bilgileri (opsiyonel)
+
+        Returns:
+            str: Kaydedilen hafıza girdisinin ID'si
+        """
+        try:
+            with db_session() as session:
+                # Metadata'ya user_id ekle
+                if metadatas is None:
+                    metadatas = {}
+
+                if 'user_id' not in metadatas:
+                    metadatas['user_id'] = user_id
+
+                memory = LongTermMemory(
+                    content=content,
+                    embedding=embedding.tolist(),
+                    metadatas=metadatas
+                )
+                session.add(memory)
+                session.flush()
+                memory_id = memory.id
+
+                logger.info(f"Long-term memory kaydedildi: {memory_id}")
+                return str(memory_id)
+        except Exception as e:
+            logger.error(f"Long-term memory kaydedilirken hata: {e}")
+            raise
+
+    def retrieve_similar_memories_with_metadata(self, user_id: str, embedding: np.ndarray, top_k: int = 3):
+        """
+        Embedding benzerliğine göre en benzer hafızaları metadata ile birlikte getirir.
+
+        Args:
+            user_id: Kullanıcı kimliği
+            embedding: Sorgu vektörü
+            top_k: Getirilecek maksimum kayıt sayısı
+
+        Returns:
+            List[Tuple[str, float, datetime, Dict]]: (içerik, benzerlik, tarih, metadata) dörtlülerinden oluşan liste
+        """
+        try:
+            with db_session() as session:
+                # Vektör benzerlik araması
+                memories = session.scalars(
+                    select(LongTermMemory)
+                    .filter(LongTermMemory.metadatas['user_id'].astext == user_id)
+                    .order_by(LongTermMemory.embedding.cosine_distance(embedding.tolist()))
+                    .limit(top_k)
+                ).all()
+
+                result = []
+                for memory in memories:
+                    # Cosine similarity = 1 - cosine distance
+                    distance = session.scalar(
+                        select(LongTermMemory.embedding.cosine_distance(embedding.tolist()))
+                        .where(LongTermMemory.id == memory.id)
+                    )
+                    similarity = 1 - distance
+
+                    # İçerik, benzerlik, tarih ve metadata'yı döndür
+                    result.append((
+                        memory.content,
+                        float(similarity),
+                        memory.created_at,
+                        memory.metadatas
+                    ))
+
+                logger.info(f"Retrieved {len(result)} similar memories with metadata for user {user_id}")
+                return result
+        except Exception as e:
+            logger.error(f"Failed to retrieve similar memories with metadata: {e}")
+            return []
 class PersonalityRepository:
     """Kişilik vektörlerini yönetmek için SQLAlchemy repository sınıfı."""
 
