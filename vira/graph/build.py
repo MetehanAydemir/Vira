@@ -12,6 +12,7 @@ from vira.graph.nodes.retrieve_memory import retrieve_memory_node
 from vira.graph.nodes.context_refiner_node import context_refiner_node
 from vira.graph.nodes.prepare_prompt import prepare_prompt_node
 from vira.graph.nodes.generate_response import generate_response_node
+from vira.graph.nodes.memory_relevance import memory_relevance_node
 from vira.graph.nodes.save_memory import save_memory_node
 
 # --- Kenar Karar Fonksiyonları ---
@@ -35,6 +36,7 @@ workflow.add_node("retrieve_memory", retrieve_memory_node)
 workflow.add_node("context_refiner", context_refiner_node)
 workflow.add_node("prepare_prompt", prepare_prompt_node)
 workflow.add_node("generate_response", generate_response_node)
+workflow.add_node("memory_relevance", memory_relevance_node)
 workflow.add_node("save_memory", save_memory_node)
 
 # 2. Graf Akışını (Kenarları) Tanımla
@@ -58,7 +60,8 @@ workflow.add_conditional_edges(
 workflow.add_edge("retrieve_memory", "context_refiner")
 workflow.add_edge("context_refiner", "prepare_prompt")
 workflow.add_edge("prepare_prompt", "generate_response")
-workflow.add_edge("generate_response", "save_memory")
+workflow.add_edge("generate_response", "memory_relevance")  # Değiştirilen kısım
+workflow.add_edge("memory_relevance", "save_memory")  # Yeni eklenen kenar
 
 # Bitiş noktaları
 workflow.add_edge("handle_omega", END)
