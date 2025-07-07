@@ -10,6 +10,9 @@ export const ChatProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [userId, setUserId] = useState(null);
 
+  // artık global memoryContext state'ine ihtiyacımız yok
+  // çünkü her mesaj kendi memory_context'ini içerecek
+
   // Komponent yüklendiğinde kullanıcı kimliğini belirle
   useEffect(() => {
     const id = getUserId();
@@ -147,9 +150,12 @@ export const ChatProvider = ({ children }) => {
           responseContent = JSON.stringify(response);
         }
 
+        // Asistan mesajı ve hafıza bağlamını birlikte ekleyelim
         const assistantMessage = {
           role: 'assistant',
-          content: responseContent
+          content: responseContent,
+          // Hafıza bağlamını doğrudan mesaj nesnesine ekliyoruz
+          memoryContext: response.memory_context || null
         };
 
         setMessages(prev => [...prev, assistantMessage]);
@@ -169,7 +175,8 @@ export const ChatProvider = ({ children }) => {
       // Hata mesajını göster
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `Üzgünüm, bir hata oluştu: ${errorMessage}`
+        content: `Üzgünüm, bir hata oluştu: ${errorMessage}`,
+        memoryContext: null
       }]);
     } finally {
       setLoading(false);

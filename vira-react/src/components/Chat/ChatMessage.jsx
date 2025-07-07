@@ -1,8 +1,8 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-
+import MemoryContext from './MemoryContext';
 const ChatMessage = ({ message, isLastMessage, isTyping }) => {
-  const { role, content } = message;
+  const { role, content, memoryContext } = message;
   const isUser = role === 'user';
   
   return (
@@ -49,7 +49,14 @@ const ChatMessage = ({ message, isLastMessage, isTyping }) => {
             <span></span>
           </div>
         )}
-        
+
+        {/* Asistan mesajları için hafıza bağlamını göster */}
+        {!isUser && memoryContext && (
+          <div className="message-memory-context">
+            <MemoryContext memoryContext={memoryContext} />
+          </div>
+        )}
+
         {!isUser && (
           <div className="message-timestamp">
             {new Date().toLocaleTimeString()}
