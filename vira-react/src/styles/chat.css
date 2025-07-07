@@ -481,3 +481,62 @@
     overflow-x: auto;
   }
 }
+.memory-context {
+  background-color: #f7f7f7;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 10px 15px;
+  margin-bottom: 15px;
+}
+
+.memory-context h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.memory-context h3 .expansion-indicator {
+  font-weight: bold;
+  margin-left: auto;
+  padding: 0 5px;
+}
+
+.memory-formatted {
+  margin-top: 10px;
+  padding-left: 24px; /* İkonla hizalamak için */
+  border-left: 2px solid #e0e0e0;
+  margin-left: 6px; /* İkonla hizalamak için */
+}
+
+.memory-formatted p {
+  margin: 0 0 5px;
+  font-size: 0.9rem;
+  color: #555;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.message-memory-context {
+  margin-top: 10px;
+  padding-top: 5px;
+  border-top: 1px dashed #e0e0e0;
+}
+
+.message-memory-context .memory-context {
+  margin-bottom: 0;
+  background-color: rgba(247, 247, 247, 0.7);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.message-memory-context .memory-context h3 {
+  font-size: 0.9rem;
+}
+
+.message-memory-context .memory-formatted {
+  max-height: 150px;
+  overflow-y: auto;
+}
