@@ -6,7 +6,8 @@ from vira.db.repository import PersonalityRepository
 from langchain_core.messages import SystemMessage, HumanMessage
 import time
 from vira.utils.llm_client import call_chat_model
-
+import re
+import json
 logger = get_logger(__name__)
 
 

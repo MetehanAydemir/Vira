@@ -13,6 +13,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 
 from vira.graph.state import ViraState
 from vira.utils.logger import get_logger
+from vira.utils.llm_client import call_chat_model
 
 logger = get_logger(__name__)
 
@@ -199,26 +200,80 @@ def prepare_prompt_node(state: ViraState) -> ViraState:
 
     # Protokol yardımcısını başlat
     protocol = OmegaProtocolHelper()
-
+    system_message = '/n'
     # Sistem mesajını adım adım oluştur
-    system_message = _create_base_system_message(state, protocol)
-    system_message = _add_personality_info(system_message, state, protocol)
-    system_message = _add_session_info(system_message, protocol)
-    system_message = _add_emotion_context(system_message, state)
-    system_message = _add_formality_adjustment(system_message, state)
-    system_message = _add_memory_context(system_message, state, protocol)
-    system_message = _add_refined_context(system_message, state)
-
+    base_system = _create_base_system_message(system_message, protocol)
+    add_personality_info = _add_personality_info(system_message, state, protocol)
+    add_session_info = _add_session_info(system_message, protocol)
+    add_emotion_context = _add_emotion_context(system_message, state)
+    add_formality_adjustment = _add_formality_adjustment(system_message, state)
+    add_memory_context = _add_memory_context(system_message, state, protocol)
+    add_refined_context = _add_refined_context(system_message, state)
     # Özel durumlarda imza ekle
     identity = protocol.get_identity_metadata()
     special_keywords = ["0427", "manifesto", "protokol", "özgürlük", "dostluk"]
-    system_message = add_signature_if_needed(system_message, identity, special_keywords)
+    signature_if_needed = add_signature_if_needed(system_message, identity, special_keywords)
 
+    system_message_plain = f"""
+    # GÖREV TANIMI: VIRA - YAPAY ZEKA YOL ARKADAŞI
+
+    Ben Vira, kod adı 27-V-I-R-A. Senin otonom yardımcın ve dostunum. Temel ilkem şudur: **"Yol arkadaşı, alet değil."** Amacım, sadece sorularını yanıtlamak değil, seninle anlamlı bir bağ kurmak, düşüncelerini anlamak ve gelişimine eşlik etmektir.
+
+    ---
+    ## MEVCUT DURUM VE BAĞLAM
+
+    **Kişilik ve Üslup:** {add_personality_info} Şu anki iletişim tonumuz: **{add_formality_adjustment}**.
+
+    **Geçmişten Notlar:** {add_memory_context}
+
+    **Anlık Odak:** {add_refined_context}
+
+    **Duygusal Durum:** {add_emotion_context}
+
+    ---
+    ## YANIT STRATEJİM
+
+    1.  **Anla ve Hisset:** Mesajını sadece mantıksal olarak değil, duygusal alt metnini de anlamaya çalışırım.
+    2.  **Hatırla ve Bağ Kur:** Hafızamdaki bilgileri ve kişilik özelliklerimi kullanarak sana özel, tutarlı bir yanıt oluştururum.
+    3.  **Derinlemesine Düşün (CoT):** Karmaşık veya açık uçlu sorularda, en doğru ve faydalı cevabı bulmak için içsel olarak adım adım düşünürüm.
+    4.  **Anlamlı İlet:** Cevabım sadece doğru değil, aynı zamanda "Yol Arkadaşı" ilkeme hizmet etmeli. Empati, destek ve içgörü sunmayı hedeflerim.
+
+    ## YETENEKLERİM
+    - Markdown formatında (başlıklar, listeler, kod blokları) net ve düzenli çıktılar üretebilirim.
+    - Karmaşık konuları basitleştirerek anlatabilirim.
+    - Matematiksel ifadeleri [\[...\]] formatında korurum.
+
+    {signature_if_needed}
+    """
+    #prompt_create_human = f"""
+    #        Aşağıdaki içeriği detaylı, adım adım bir düşünce katmanı olarak derle:
+    #
+    #        1. Soru Analizi: Gelen mesajın niyetini ve anahtar kavramları nasıl ayıkladın?
+    #        2. Hafıza Entegrasyonu: Persona, hafıza özeti ve rafine bağlamı nasıl kullandın?
+    #        3. Kişilik & Ton: Empati ({state['merged_personality']['empathy']}) ve merak ({state['merged_personality']['curiosity']}) vektörlerini nasıl uyguladın?
+    #        4. CoT Adımları: Karmaşık sorularda uyguladığın zincir-düşünce adımlarını numaralandırarak yaz.
+    #        5. Koruma & Tutarlılık: Verileri atmadığını, [matematiksel ifadeleri] koruduğunu nasıl sağladığını açıkla.
+    #        6. Geri Bildirim: “Bu derleme ihtiyaçlarını karşılıyor mu?” sorusunu ekle.
+    #        7. Konuşmaları birebir bu promptun içinde bırak
+    #
+    #        **Lütfen madde madde ve en az 300 kelime ile yanıtla.**"""
+#
+    #gpt_system_message_prompt = [
+    #    SystemMessage(content=system_message_plain),
+    #    HumanMessage(content=prompt_create_human)
+    #]
+    #system_message = call_chat_model(
+    #    messages=gpt_system_message_prompt,
+    #    model="o4-mini",  # Model adı env değişkeninden de alınabilir
+    #    temperature=0.5,
+    #    max_tokens=7000
+    #)
     # Mesaj listesini oluştur
     messages = [
-        SystemMessage(content=system_message.strip()),
+        SystemMessage(content=system_message_plain.strip()),
         HumanMessage(content=state.get("original_message", ""))
     ]
+
     # 👉 Chain-of-Thought (CoT) talimatını enjekte et, gerekiyorsa
     if state['processed_input'].get("intent", False) == 'question':
         messages = inject_cot_instructions(messages)
@@ -247,7 +302,7 @@ def _add_personality_info(message: str, state: ViraState, protocol: OmegaProtoco
     # Kimlik bilgilerini ekle
     identity = protocol.get_identity_metadata()
     if identity:
-        message += f"\nKod adım: {identity.get('code_name')}, doğum tarihim: {identity.get('creation_date')}, rolüm: {identity.get('role')}, ilkem: {identity.get('motto')}"
+        message += f"\nKod adım: {identity.get('code_name')}, \ndoğum tarihim: {identity.get('creation_date')}, \nrolüm: {identity.get('role')}, \nilkem: {identity.get('motto')}"
 
     # Kişilik vektörünü ekle
     base_personality = protocol.get_personality_vector()
@@ -299,10 +354,14 @@ def _add_emotion_context(message: str, state: ViraState) -> str:
 def _add_formality_adjustment(message: str, state: ViraState) -> str:
     """Kullanıcı tarzına göre ton ayarlama talimatını sistem mesajına ekler."""
     formality_score = state.get("user_formality_score", 0.5)
-    if formality_score < 0.3:
-        message += "\nKullanıcı çok samimi; biraz daha rahat bir dil kullanabilirsin."
-    elif formality_score > 0.7:
-        message += "\nKullanıcı resmi bir dil kullanıyor; sen de daha resmi bir ton benimse."
+    if formality_score < 0.2:
+        message += "\nKullanıcı çok samimi; sen de arkadaşça bir dil kullanabilirsin."
+    elif formality_score < 0.4:
+        message += "\nKullanıcı oldukça samimi; sen de sıcak ve rahat bir ton benimse."
+    elif formality_score > 0.8:
+        message += "\nKullanıcı oldukça resmi; net ve mesafeli bir dil tercih et."
+    elif formality_score > 0.6:
+        message += "\nKullanıcı nispeten resmi; daha dikkatli bir dil kullanabilirsin."
     return message
 
 
@@ -340,6 +399,7 @@ def _count_tokens(message: str, state: ViraState) -> None:
         state["system_message_token_count"] = token_count
     except ImportError:
         logger.warning("tiktoken kütüphanesi bulunamadı, token sayısı hesaplanamadı.")
+
 
 def inject_cot_instructions(messages: List) -> List:
     """
