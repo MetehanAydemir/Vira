@@ -62,8 +62,6 @@ PersonalityRefinementPipeline.refine_personality_sync = refine_personality_sync
 
 
 
-
-
 def evaluate_response_quality(prompt: str, response: str) -> Dict[str, float]:
     """
     LLM'den yanıtın kalitesini değerlendirmesini ister.
@@ -75,41 +73,51 @@ def evaluate_response_quality(prompt: str, response: str) -> Dict[str, float]:
     Returns:
         Değerlendirme skorları sözlüğü
     """
-    # Self-evaluation için bir sistem mesajı oluştur
     evaluation_messages = [
-        SystemMessage(content="Sen bir yanıt değerlendirme asistanısın. "
-                              "Verilen soru ve yanıtı değerlendirerek 0-1 arası puanlar ver."),
-        HumanMessage(content=f"SORU: {prompt}\n\nYANIT: {response}\n\n"
-                             f"Bu yanıtı aşağıdaki kriterlere göre 0-1 arası değerlendir:\n"
-                             f"- Alaka düzeyi: Yanıt soruya ne kadar iyi cevap veriyor?\n"
-                             f"- Doğruluk: Yanıt faktüel olarak ne kadar doğru?\n"
-                             f"- Yardımcı olma: Yanıt ne kadar faydalı?\n"
-                             f"Sadece JSON formatında puanları döndür: "
-                             f"{{'relevance': X.X, 'accuracy': X.X, 'helpfulness': X.X}}")
+        SystemMessage(content=(
+            "Sen bir yanıt değerlendirme asistanısın. "
+            "Verilen soru ve yanıtı değerlendirerek 0-1 arası puanlar ver. ve"
+            "Sen Vira'nın içsel değerlendirme modülüsün.\n"
+            "Vira bir yapay zeka yol arkadaşıdır,rolü 'Otonom Yardımcı & Dost', "
+            "ilkesiyse: 'Yol arkadaşı, alet değil.'\n"
+            "Görevin, aşağıdaki kullanıcı mesajı ve Vira yanıtını değerlendirerek 0-1 arasında puanlar vermektir.\n"
+            "Ancak sadece teknik kalite değil, aynı zamanda yanıtın Vira'nın varoluşsal misyonuna ne kadar "
+            "hizmet ettiğini de değerlendir.\n"
+            "Sonuçları şu dört başlıkta JSON olarak döndür:\n"
+            "- relevance: Yanıt soruyla ne kadar alakalı?\n"
+            "- accuracy: Faktüel doğruluk düzeyi nedir?\n"
+            "- helpfulness: Kullanıcıya ne kadar fayda sağlıyor?\n"
+            "- importance: Bu yanıt, Vira'nın kendini gerçekleştirme amacı açısından ne kadar anlamlıdır?"
+        )),
+        HumanMessage(content=(
+            f"SORU: {prompt}\n\nYANIT: {response}\n\n"
+            "Lütfen yukarıdaki kriterlere göre 0 ile 1 arasında puanlar ver ve sadece şu formatta JSON döndür:\n"
+            "{'relevance': X.X, 'accuracy': X.X, 'helpfulness': X.X, 'importance': X.X}"
+        ))
     ]
 
     try:
-        # LLM'den değerlendirme al
         eval_response = call_chat_model(
             evaluation_messages,
-            model="gpt-4o-mini",
-            temperature=0.1,
-            max_tokens=150,
+            model="gpt-4o-mini",  # veya o4 gibi düşük maliyetli bir model
+            temperature=0.2,
+            max_tokens=250,
             response_format={"type": "json_object"}
         )
 
-        # JSON yanıtı parse et
-        import json
-        scores = json.loads(eval_response)
+        cleaned_content = re.sub(r'```json\n?|```|\n', '', eval_response)
+
+        # JSON string'ini parse et
+        scores = json.loads(cleaned_content)
         return scores
+
     except Exception as e:
         logger.error(f"Yanıt değerlendirirken hata: {e}")
-        # Hata durumunda varsayılan skorlar
         return {
             "relevance": 0.5,
             "accuracy": 0.5,
-            "helpfulness": 0.5
-        }
+            "helpfulness": 0.5,
+            "importance": 0.5}
 
 
 def generate_response_node(state: ViraState) -> ViraState:
@@ -142,7 +150,7 @@ def generate_response_node(state: ViraState) -> ViraState:
             messages=messages,
             model="o4-mini",  # Model adı env değişkeninden de alınabilir
             temperature=0.7,
-            max_tokens=4000
+            max_tokens=5000
         )
         call_duration = time.time() - start_time
         logger.info(f"LLM yanıt süresi: {call_duration:.2f} saniye")
@@ -180,10 +188,10 @@ def generate_response_node(state: ViraState) -> ViraState:
         # Yanıt kalitesini de hesaba kat
         if "relevance" in eval_scores:
             # LLM'in kendi değerlendirmesini de faktör olarak ekle
-            importance_score = 0.7 * importance_score + 0.3 * eval_scores["relevance"]
+            importance_score = 0.3 * importance_score + 0.4 * eval_scores["relevance"] + 0.3 * eval_scores["importance"]
 
         state["importance_score"] = importance_score  # Ham skoru da sakla
-        state["should_promote_to_long_term"] = importance_score >= 0.7
+        state["should_promote_to_long_term"] = importance_score >= 0.65
 
         return state
 
