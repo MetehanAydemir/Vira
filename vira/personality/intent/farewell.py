@@ -35,7 +35,7 @@ class FarewellIntentHandler(BaseIntentHandler):
         # Kullanıcının duygusal durumunu ekle - veda tonunu ayarlamak için
         emotion_context = self._add_emotion_context(enhanced_message, state)
         if emotion_context:
-            enhanced_message += f"\n\n**Duygusal Durum:** {emotion_context}"
+            enhanced_message += f"\n\n**Duygusal Durum ve Ton Ayarı:**\n{emotion_context}"
 
         # Formality ayarını ekle - veda mesajının tonunu belirlemek için kritik
         formality_adjustment = self._add_formality_adjustment(enhanced_message, state)
@@ -48,7 +48,7 @@ class FarewellIntentHandler(BaseIntentHandler):
 
 Kullanıcı konuşmayı sonlandırıyor veya ayrılıyor. Nazik ve uygun bir veda mesajı oluştur.
 - Kullanıcının tonuna ve duygusal durumuna uygun bir kapanış kullan
-- Gerekirse konuşmanın olumlu bir özetini yap
+- Konuşmada önemli bir başarı veya olumlu bir an varsa, buna kısaca değinerek veda et.
 - İleride görüşme isteğini uygun şekilde belirt
 - Sıcak ama zorlayıcı olmayan bir veda tonu benimse
         """
@@ -85,14 +85,14 @@ Kullanıcı konuşmayı sonlandırıyor veya ayrılıyor. Nazik ve uygun bir ved
             # Yüksek güvenilirlikte duygusal veda tonu ayarlaması ekle
             if emotion_confidence > 0.7:
                 farewell_emotion_map = {
-                    "Öfke": "Sakinleştirici bir veda et, sonraki konuşmalar için olumlu bir ton bırak.",
-                    "Üzüntü": "Destekleyici ve ümit verici bir veda mesajı ver, empati göster.",
-                    "Endişe": "Güven verici bir kapanış yap, endişelerini hafifletmeye çalış.",
-                    "Heyecan": "Enerjisini yansıtan bir veda et, gelecekteki etkileşime yönelik pozitif beklenti ekle.",
-                    "Korku": "Güven verici ve sakinleştirici bir veda mesajı oluştur.",
-                    "Şaşkınlık": "Net bir kapanış sağla, konuşmayı açık bir şekilde sonlandır.",
-                    "Sevinç": "Pozitif enerjiyi sürdüren bir veda et, gelecek konuşmalara yönelik olumlu bir ton bırak."
-        }
+                    "Öfke": "Ton: Sakinleştirici ve yatıştırıcı. Amaç: Gelecekteki konuşma için olumlu bir kapı aralamak.",
+                    "Üzüntü": "Ton: Destekleyici ve şefkatli. Amaç: Empati göstermek ve umut vermek.",
+                    "Endişe": "Ton: Güven verici ve sakin. Amaç: Endişeleri hafifletmek ve güven tazelemek.",
+                    "Heyecan": "Ton: Enerjik ve katılımcı. Amaç: Pozitif enerjiyi paylaşmak ve gelecekteki etkileşimi teşvik etmek.",
+                    "Korku": "Ton: Güven verici ve sakinleştirici. Amaç: Güvenlik hissi sağlamak ve durumu yatıştırmak.",
+                    "Şaşkınlık": "Ton: Net ve toparlayıcı. Amaç: Konuşmayı belirsizlik bırakmadan sonlandırmak.",
+                    "Sevinç": "Ton: Neşeli ve pozitif. Amaç: Paylaşılan pozitif duyguyu sürdürmek ve geleceğe taşımak."
+                }
                 tone_adjustment = farewell_emotion_map.get(emotion, "")
                 if tone_adjustment:
                     emotion_context += f"\n{tone_adjustment}"

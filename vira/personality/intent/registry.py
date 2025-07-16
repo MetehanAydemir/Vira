@@ -5,7 +5,7 @@ Bu modül, farklı niyet türlerinin ilgili handler sınıflarına eşlendiği
 merkezi bir kayıt defteri sağlar.
 """
 
-from typing import Dict, Type, Any
+from typing import Dict, Type, Any, List, Optional, Tuple
 from vira.graph.nodes.intent_classifier import IntentType
 from vira.personality.intent.base import BaseIntentHandler
 

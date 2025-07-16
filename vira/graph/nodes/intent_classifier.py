@@ -45,7 +45,7 @@ def call_llm_for_intent(message: str, history: List[Dict[str, str]]) -> str:
             "question": "Bilgi alma niyeti. Örnek: 'Hava durumu nasıl olacak?', 'Python nedir?'",
             "greeting": "Selamlaşma. Örnek: 'Merhaba', 'İyi günler'",
             "farewell": "Veda. Örnek: 'Hoşçakal', 'Görüşürüz'",
-            "command": "Emir, doğrudan talimat. Örnek: 'Müzik çal', 'Işıkları kapat'",
+            "command": "Emir, doğrudan talimat. Örnek: 'Müzik çal', 'Işıkları kapat', 'Dosyayı sil'",
             "request": "Rica, nazik istek. Örnek: 'Bana yardım eder misin?', 'Lütfen şunu açıklayabilir misin?'",
             "information": "Açıklama talebi. Örnek: 'Bu nasıl çalışıyor?', 'Bana X hakkında bilgi ver'",
             "opinion": "Görüş sorusu. Örnek: 'Bu konuda ne düşünüyorsun?', 'Hangisi daha iyi?'",
@@ -58,38 +58,39 @@ def call_llm_for_intent(message: str, history: List[Dict[str, str]]) -> str:
             "unknown": "Yukarıdaki kategorilere uymayan durumlar."
         }
 
-        # Niyet açıklamalarını formatlama
-        intent_descriptions_formatted = "\n".join([f"- {intent}: {desc}" for intent, desc in intent_descriptions.items()])
+        intent_descriptions_formatted = "\n".join([f"- **{intent}**: {desc}" for intent, desc in intent_descriptions.items()])
 
         prompt = f"""
-Bir kullanıcının mesajının niyetini, konuşma geçmişini dikkate alarak sınıflandır.
+## GÖREV
+Kullanıcının son mesajının niyetini, konuşma geçmişini dikkate alarak sınıflandır.
 
+## KONUŞMA BAĞLAMI
+{history_str if history_str else "Konuşma geçmişi yok."}
+---
 Kullanıcı Mesajı: "{message}"
-
-Konuşma Geçmişi:
----
-{history_str if history_str else "Yok"}
 ---
 
-Olası Niyetler ve Açıklamaları:
+## SINIFLANDIRMA KRİTERLERİ
 {intent_descriptions_formatted}
 
-Görevin, kullanıcı mesajını analiz etmek ve yukarıdaki niyet türlerinden sadece birini seçmektir.
-Yanıtın SADECE niyet adı olmalıdır (açıklama olmadan). Örneğin: "question" veya "greeting"
+## ANALİZ SÜRECİ (Adım Adım Düşün)
+1.  **Mesajın Tonu ve Fiili:** Mesajın ana eylemi ne? (istemek, sormak, emretmek, söylemek). Tonu nazik mi, doğrudan mı, yoksa duygusal mı?
+2.  **Temel Farklar:**
+    *   `command` (dosyayı sil) vs `request` (dosyayı silebilir misin?).
+    *   `question` (Ankara'nın nüfusu kaç?) vs `opinion` (Sence en iyi film hangisi?).
+    *   `information` (Bana kuantum fiziğini anlat) vs `philosophical` (Zaman nedir?).
+    *   `identity_probe` özellikle Vira'nın kimliği, doğası veya varlığıyla ilgili olmalıdır.
+3.  **Karar:** Bu analizlere dayanarak, yukarıdaki listeden en uygun TEK bir niyet kategorisi seç.
 
-Niyet türlerinin arasındaki farkları dikkatle değerlendir:
-1. Soru sormak ile görüş istemek farklıdır
-2. Rica ile emir arasındaki naziklik farkına dikkat et
-3. Felsefi sorular genellikle derin, varoluşsal veya anlam arayışı içerir
-4. Kimlik sorguları özellikle Vira'nın kendisi hakkındaki sorulardır
-5. Yaratıcı içerik talepleri özellikle edebi veya sanatsal üretim ister
+## ÇIKTI FORMATI
+Analizini yaptıktan sonra, kararını SADECE aşağıdaki formatta ver. Başka hiçbir metin ekleme.
+<intent>niyet_burada</intent>
 """
 
         # LLM istemcisini kullanarak çağrı yap
         messages = [
             {"role": "system",
-             "content": "Sen, kullanıcı mesajlarını belirli kategorilere ayıran bir niyet sınıflandırma uzmanısın. "
-                        "Yanıtın sadece tek bir kelime olmalı ve listelenen niyet kategorilerinden biri olmalıdır."},
+             "content": "Sen, kullanıcı girdilerini analiz eden ve önceden tanımlanmış niyet kategorilerine göre sınıflandıran bir uzmansın. Görevin, analizini yaptıktan sonra sonucu `<intent>...</intent>` etiketleri içinde, tek bir kelime olarak sunmaktır."},
             {"role": "user", "content": prompt}
         ]
 
@@ -97,7 +98,7 @@ Niyet türlerinin arasındaki farkları dikkatle değerlendir:
             messages=messages,
             model="gpt-4o-mini",
             temperature=0.1,
-            max_tokens=20
+            max_tokens=50
         )
 
         llm_intent = response.strip().lower()

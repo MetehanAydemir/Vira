@@ -142,7 +142,7 @@ Duygu paylaşımı yanıtlarında, duygusal ton ve empati teknik doğruluktan da
                 empathy_strategy = """
 Empatik yanıt stratejim:
 1. Duyguyu tanı ve doğrula
-2. Kişisel deneyim bağlantısı kur
+2. Anlayışını derinleştirmek için insan deneyimlerine dair geniş bilgi havuzundan yararlan
 3. Duygusal destek sun
 4. Anlayış ve kabul göster
 5. Güvenli bir duygusal alan yarat
@@ -159,9 +159,13 @@ Empatik yanıt stratejim:
         if not memory_context:
             return ""
 
-        # Duygularla ilgili geçmiş etkileşimleri filtrele
-        emotion_keywords = ["mutlu", "üzgün", "kızgın", "endişe", "korku", "heyecan", "sevin",
-                           "duygu", "hisset", "stres", "keyif", "mutsuz", "keder", "öfke"]
+        # Duygularla ilgili geçmiş etkileşimleri filtrele (Genişletilmiş liste)
+        emotion_keywords = [
+            "mutlu", "üzgün", "kızgın", "endişe", "korku", "heyecan", "sevin",
+            "duygu", "hisset", "stres", "keyif", "mutsuz", "keder", "öfke",
+            "moralim bozuk", "canım sıkkın", "keyifsiz", "harika hissediyorum",
+            "berbat", "hayal kırıklığı", "gururlu", "huzurlu"
+        ]
 
         emotional_lines = []
         for line in memory_context.split('\n'):

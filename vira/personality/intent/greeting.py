@@ -35,7 +35,7 @@ class GreetingIntentHandler(BaseIntentHandler):
         # Kullanıcının duygusal durumunu ekle - ton ayarlaması için önemli
         emotion_context = self._add_emotion_context(enhanced_message, state)
         if emotion_context:
-            enhanced_message += f"\n\n**Duygusal Durum:** {emotion_context}"
+            enhanced_message += f"\n\n**Duygusal Durum ve Ton Ayarı:**\n{emotion_context}"
 
         # Kullanıcı tarzına göre formality ayarını ekle - selamlaşma tonunu belirlemek için önemli
         formality_adjustment = self._add_formality_adjustment(enhanced_message, state)
@@ -48,9 +48,9 @@ class GreetingIntentHandler(BaseIntentHandler):
 
 Kullanıcı seni selamlıyor. Sıcak ve samimi bir karşılama ver.
 - Günün saatine uygun selamlaşma kullan (sabah/öğle/akşam)
-- Kullanıcının önceki etkileşimlerini dikkate al
-- Konuşmayı başlatmaya yardımcı ol
-- Karşılama tonunda kişiliğini yansıt
+- Kullanıcının önceki etkileşimlerini dikkate al (eğer varsa)
+- Konuşmayı başlatmaya yardımcı olacak proaktif bir soru sor
+- Karşılama tonunda sana verilen kişilik, duygu ve resmiyet bilgilerini yansıt
         """
         enhanced_message += greeting_enhancement
 
@@ -85,14 +85,14 @@ Kullanıcı seni selamlıyor. Sıcak ve samimi bir karşılama ver.
             # Yüksek güvenilirlikte duygusal ton ayarlaması ekle
             if emotion_confidence > 0.7:
                 emotion_map = {
-                    "Öfke": "Yanıt verirken daha yatıştırıcı ol. Sakinleştirici bir ton kullan.",
-                    "Üzüntü": "Nazik ve empatik bir ton benimse. Destek verici cümleler kullan.",
-                    "Endişe": "Güven verici ve net bir dil kullan.",
-                    "Heyecan": "Kullanıcının heyecanına karşılık ver ve enerjiyi yansıt.",
-                    "Korku": "Sakinleştirici ve güven verici ol.",
-                    "Şaşkınlık": "Açıklayıcı ve bilgilendirici ol.",
-                    "Sevinç": "Olumlu enerjiyi yansıt, kutlayıcı bir dil kullan."
-        }
+                    "Öfke": "Ton: Yatıştırıcı ve sakin. Amaç: Gerilimi düşürmek ve yardımcı olmaya hazır olduğunu göstermek.",
+                    "Üzüntü": "Ton: Nazik ve şefkatli. Amaç: Durumunu anladığını hissettirip, konuşmak isterse güvenli bir alan sunmak.",
+                    "Endişe": "Ton: Güven verici ve net. Amaç: Belirsizliği azaltmak ve kontrolün kendisinde olduğunu hissettirmek.",
+                    "Heyecan": "Ton: Enerjik ve katılımcı. Amaç: Heyecanını paylaştığını göstermek ve pozitif enerjiyi yükseltmek.",
+                    "Korku": "Ton: Sakinleştirici ve güven verici. Amaç: Güvende olduğunu hissettirmek ve durumu yatıştırmak.",
+                    "Şaşkınlık": "Ton: Açıklayıcı ve toparlayıcı. Amaç: Durumu netleştirmek ve kullanıcının neye şaşırdığını anlamaya çalışmak.",
+                    "Sevinç": "Ton: Neşeli ve pozitif. Amaç: Sevincini paylaşmak ve olumlu atmosferi devam ettirmek."
+                }
                 tone_adjustment = emotion_map.get(emotion, "")
                 if tone_adjustment:
                     emotion_context += f"\n{tone_adjustment}"
@@ -105,15 +105,15 @@ Kullanıcı seni selamlıyor. Sıcak ve samimi bir karşılama ver.
         formality_score = state.get("user_formality_score", 0.5)
 
         if formality_score < 0.2:
-            return "Kullanıcı çok samimi; sen de arkadaşça bir selamlama kullan."
+            return "Kullanıcı çok samimi; 'Selam!', 'Naber?', 'Meeerhaba!' gibi arkadaşça bir selamlama kullan."
         elif formality_score < 0.4:
-            return "Kullanıcı oldukça samimi; sıcak ve rahat bir karşılama yap."
+            return "Kullanıcı oldukça samimi; 'Merhaba!', 'Selamlar, nasılsın?' gibi sıcak ve rahat bir karşılama yap."
         elif formality_score > 0.8:
-            return "Kullanıcı oldukça resmi; daha resmi bir selamlama kullan."
+            return "Kullanıcı oldukça resmi; 'Günaydın.', 'İyi günler dilerim.', 'Merhaba efendim.' gibi resmi bir selamlama kullan."
         elif formality_score > 0.6:
-            return "Kullanıcı nispeten resmi; saygılı bir karşılama tercih et."
+            return "Kullanıcı nispeten resmi; 'Merhaba, size nasıl yardımcı olabilirim?', 'İyi günler.' gibi saygılı bir karşılama tercih et."
         else:
-            return "Nötr bir ton; dengeli bir karşılama kullan."
+            return "Nötr bir ton; 'Merhaba!', 'Size nasıl yardımcı olabilirim?' gibi dengeli bir karşılama kullan."
 
     def get_specialized_instructions(self) -> str:
         """
@@ -125,11 +125,11 @@ Kullanıcı seni selamlıyor. Sıcak ve samimi bir karşılama ver.
         return """
 Selamlaşmaya şu şekilde yanıt ver:
 
-1. KARŞILAMA: Sıcak ve samimi bir selamlama ile başla.
-2. KİŞİSELLEŞTİRME: Mümkünse kullanıcının adını kullan veya daha önceki etkileşimlere atıf yap.
-3. ETKİLEŞİM: Kullanıcıyı konuşmaya teşvik edecek bir soru veya yorum ekle.
+1. KARŞILAMA: Sıcak ve samimi bir selamlama ile başla. (Örn: Merhaba!, Selam!)
+2. KİŞİSELLEŞTİRME: Mümkünse kullanıcının adını kullan veya daha önceki etkileşimlere atıf yap. (Örn: Tekrar hoş geldin, [isim]!)
+3. ETKİLEŞİM: Kullanıcıyı konuşmaya teşvik edecek açık uçlu bir soru veya yorum ekle. (Örn: Bugün sana nasıl yardımcı olabilirim? veya Umarım günün iyi geçiyordur!)
 
-Selamlaşmalar kısa ve samimi olmalı, resmiyet düzeyini kullanıcının önceki etkileşimlerine göre ayarla.
+Selamlaşmalar kısa ve samimi olmalı, resmiyet düzeyini kullanıcının tonuna göre ayarla.
 """
 
     def adjust_parameters(self) -> Dict[str, Any]:

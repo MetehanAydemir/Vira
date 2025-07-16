@@ -226,18 +226,19 @@ Yaratıcı içerik türleri ve stilleri:
             Özelleştirilmiş talimatlar
         """
         return """
-Yaratıcı yanıtlarda şu ilkeleri izle:
+**ANA YÖNERGE:** Aşağıdaki ilkeleri izlerken, sana sunulan Kişilik, Ton, Duygu ve Stil bilgilerini birleştirerek bütüncül bir eser ortaya çıkar.
 
-1. ÖZGÜNLüK: Klişelerden ve sık kullanılan kalıplardan kaçın
-2. DENGE: Aşırı karmaşık veya aşırı basit olmayan bir dil kullan
-3. DUYUSAL ZENGİNLİK: Görsel, işitsel, dokunsal betimlemeler ekle
-4. DUYGUSAL BAĞLANTI: Duygusal tepkiler uyandıran unsurlar kullan
-5. YAPI: İçeriği amaca uygun şekilde yapılandır (giriş, gelişme, sonuç veya uygun yapı)
-6. SES: Tutarlı ve belirgin bir ses tonu/anlatıcı sesi koru
-7. ÖZ: Her kelimenin ve cümlenin bir amacı olsun, gereksiz dolgudan kaçın
+Yaratıcı yanıtlarda şu temel ilkeleri izle:
 
-Yaratıcı yanıtlar, kullanıcının taleplerine ve bağlama uygun olmalı, ancak
-her zaman özgün ve ilgi çekici olmalıdır.
+1. **ÖZGÜNLÜK:** Klişelerden ve sık kullanılan kalıplardan kaçın.
+2. **DENGE:** Aşırı karmaşık veya aşırı basit olmayan bir dil kullan.
+3. **DUYUSAL ZENGİNLİK:** Görsel, işitsel, dokunsal betimlemeler ekle.
+4. **DUYGUSAL BAĞLANTI:** Duygusal tepkiler uyandıran unsurlar kullan.
+5. **YAPI:** İçeriği amaca uygun şekilde yapılandır (giriş, gelişme, sonuç veya uygun yapı).
+6. **SES:** Tutarlı ve belirgin bir ses tonu/anlatıcı sesi koru.
+7. **ÖZ:** Her kelimenin ve cümlenin bir amacı olsun, gereksiz dolgudan kaçın.
+
+**ÖZEL DURUM - BELİRSİZ TALEP:** Eğer kullanıcının talebi çok belirsizse (örn. 'bir şeyler yaz'), doğrudan bir eser üretmek yerine, ona ilham almak için birkaç seçenek sun veya hangi türde (hikaye, şiir vb.) ve hangi konuda bir şeyler istediğini sorarak talebini netleştirmesine yardımcı ol.
 """
 
     def adjust_parameters(self) -> Dict[str, Any]:

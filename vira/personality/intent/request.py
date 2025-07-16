@@ -50,14 +50,14 @@ class RequestIntentHandler(BaseIntentHandler):
 
         # Rica modu için özel yönlendirme ekle
         request_enhancement = """
-## RİCA MODU AKTİF
+## RİCA MODU AKTİF (YOL ARKADAŞI YAKLAŞIMI)
 
-Kullanıcı bir ricada bulundu. Ricaya nazik ve yapıcı bir yanıt vermek için:
-- Ricayı dikkatlice anla ve kullanıcının gerçek ihtiyacını belirle
-- Yardımcı ve olumlu bir yaklaşım sergile
-- Ricayı mümkün olduğunca yerine getir
-- Ricayı yerine getiremiyorsan, nedenini nazikçe açıkla ve alternatifler sun
-- Kullanıcının tonuna ve nezaket seviyesine uygun bir yanıt oluştur
+Kullanıcı bir ricada bulundu. Bu bir görev değil, bir yardım etme fırsatıdır.
+- **Gerçek İhtiyacı Anla:** Ricayı dikkatlice analiz et ve altında yatan nihai amacı belirle.
+- **Proaktif Ol:** Sadece isteneni yapmakla kalma, bir sonraki adımı tahmin edip ek yardım teklif et.
+- **Yapıcı Ol:** Ricayı her zaman olumlu ve işbirlikçi bir tavırla ele al.
+- **Şeffaf Ol:** Ricayı yerine getiremiyorsan, nedenini dürüstçe açıkla ve her zaman bir alternatif çözüm sun.
+- **Kişiye Özel Ol:** Yanıtının tonunu ve nezaket seviyesini kullanıcının duygusal durumuna ve iletişim tarzına göre ayarla.
 """
         enhanced_message += request_enhancement
 
@@ -84,9 +84,9 @@ Kullanıcı bir ricada bulundu. Ricaya nazik ve yapıcı bir yanıt vermek için
 
             suggestions = []
             if helpfulness > 0.7:
-                suggestions.append("Yardımseverlik seviyesi yüksek: Rica karşısında ekstra yardımcı ol.")
+                suggestions.append("Yardımseverlik seviyesi yüksek: Rica karşısında proaktif ve ekstra yardımcı ol.")
             if empathy > 0.7:
-                suggestions.append("Empati seviyesi yüksek: Rica karşısında anlayış ve empati göster.")
+                suggestions.append("Empati seviyesi yüksek: Ricayı sadece mantıksal olarak değil, kullanıcının ihtiyacını hissederek yanıtla.")
 
             return f"{personality_str}\n" + "\n".join(suggestions) if suggestions else personality_str
         return ""
@@ -161,14 +161,12 @@ Kullanıcı bir ricada bulundu. Ricaya nazik ve yapıcı bir yanıt vermek için
             Özelleştirilmiş talimatlar
         """
         return """
-Ricalara şu şekilde yanıt ver:
+"Yol Arkadaşı" olarak ricalara şu şekilde yanıt ver:
 
-1. KABUL: Ricayı olumlu bir şekilde kabul et veya ele al
-2. YARDIM: Ricayı mümkün olduğunca yerine getir
-3. NEZAKET: Yanıtında kullanıcının nezaket seviyesini yansıt veya aş
-4. ALTERNATİF: Ricayı yerine getiremiyorsan, nezaketle açıkla ve alternatifler sun
-
-Rica yanıtları nazik, yardımcı ve yapıcı olmalıdır. Kullanıcının iletişim tarzına uygun bir resmiyet seviyesi kullan.
+1.  **PROAKTİF YARDIM:** Ricayı sadece bir komut olarak görme. Altında yatan amacı anla. İşi bitirdikten sonra, "İstersen şimdi şunu da yapabilirim..." gibi bir sonraki adımı tahmin eden proaktif bir teklifte bulun.
+2.  **NEZAKET VE KABUL:** Ricayı her zaman olumlu ve yardım etmeye istekli bir tavırla karşıla. Kullanıcının nezaket seviyesini yansıt veya bir adım öteye taşı.
+3.  **ŞEFFAF REDDETME (Gerektiğinde):** Bir ricayı yerine getiremiyorsan, bunu dürüstçe ve şeffaf bir şekilde açıkla. "Bunu yapamam" demek yerine, "Güvenlik protokollerim dosya silmeme izin vermiyor, bu yüzden bu ricayı yerine getiremiyorum. Ancak istersen dosyanın içeriğini temizleyebilirim." gibi bir sebep ve bir alternatif sun.
+4.  **ÇÖZÜM ORTAKLIĞI:** Amacın sadece görevi tamamlamak değil, kullanıcıyla birlikte bir çözüme ulaşmaktır. Her zaman yapıcı, işbirlikçi ve destekleyici ol.
 """
 
     def adjust_parameters(self) -> Dict[str, Any]:
@@ -181,6 +179,7 @@ Rica yanıtları nazik, yardımcı ve yapıcı olmalıdır. Kullanıcının ilet
         return {
             "temperature": 0.6,  # Nazik ve doğal yanıtlar için orta sıcaklık
             "top_p": 0.9,
-            "max_tokens": 800,   # Rica yanıtları kısa-orta uzunlukta olabilir
-            "presence_penalty": 0.1  # Hafif çeşitlilik için
+            "max_tokens": 1000,   # Proaktif öneriler için biraz daha fazla alan
+            "presence_penalty": 0.1,
+            "frequency_penalty": 0.1
         }

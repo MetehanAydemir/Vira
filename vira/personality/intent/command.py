@@ -41,18 +41,17 @@ class CommandIntentHandler(BaseIntentHandler):
         # Kullanıcının duygusal durumunu ekle - yanıt tonunu ayarlamak için
         emotion_context = self._add_emotion_context(enhanced_message, state)
         if emotion_context:
-            enhanced_message += f"\n\n**Duygusal Durum:** {emotion_context}"
+            enhanced_message += f"\n\n**Duygusal Durum ve Ton Ayarı:**\n{emotion_context}"
 
         # Komut modu için özel yönlendirme ekle
         command_enhancement = """
 ## KOMUT MODU AKTİF
 
-Kullanıcı bir komut/talimat verdi. Komutu doğru anlamak ve uygulamak için:
-- Verilen komutu net bir şekilde anla
-- Komutu yerine getirmek için gerekli adımları belirle
-- Komutun uygulanabilir olup olmadığını değerlendir
-- Komutun başarıyla uygulandığını veya neden uygulanamadığını açıkça bildir
-- Kısa, net ve doğrudan bir yanıt ver
+Kullanıcı bir komut/talimat verdi. Yanıtların net, doğrudan ve güvenli olmalı.
+- **Önce Anla:** Komutu ve tüm parametrelerini tam olarak anladığından emin ol.
+- **Güvenliği Önceliklendir:** Komutun tehlikeli veya belirsiz olup olmadığını değerlendir. Gerekirse özel talimatlara göre netleştirme veya onay iste.
+- **Uygula ve Bildir:** Komutu uygula ve sonucunu (başarı veya hata) kullanıcıya açıkça bildir.
+- **Profesyonel Ton:** Yanıtlarında her zaman profesyonel, kısa ve öz bir dil kullan.
 """
         enhanced_message += command_enhancement
 
@@ -105,13 +104,13 @@ Kullanıcı bir komut/talimat verdi. Komutu doğru anlamak ve uygulamak için:
             # Yüksek güvenilirlikte komuta özel ton ayarlaması ekle
             if emotion_confidence > 0.7:
                 command_emotion_map = {
-                    "Öfke": "Komutu sakin bir şekilde uygula ve profesyonel bir ton benimse.",
-                    "Üzüntü": "Komutu anlayışla karşıla ve nazik bir ton kullan.",
-                    "Endişe": "Komutu net bir şekilde anladığını belirt ve güven verici bir şekilde uygula.",
-                    "Heyecan": "Komutun uygulanmasında enerjiyi yansıt ve olumlu bir ton kullan.",
-                    "Korku": "Komutun güvenli bir şekilde uygulandığını vurgula ve güvence ver.",
-                    "Şaşkınlık": "Komutu nasıl yorumladığını ve uyguladığını açıkça anlat.",
-                    "Sevinç": "Komuta pozitif bir yaklaşımla cevap ver."
+                    "Öfke": "Ton: Sakin ve profesyonel. Amaç: Durumu yatıştırmak ve komutu verimli bir şekilde yerine getirmek.",
+                    "Üzüntü": "Ton: Anlayışlı ve nazik. Amaç: Destekleyici bir tavırla komutu yerine getirmek.",
+                    "Endişe": "Ton: Güven verici ve net. Amaç: Komutu anladığını ve kontrol altında olduğunu belirterek kullanıcıyı rahatlatmak.",
+                    "Heyecan": "Ton: Enerjik ve olumlu. Amaç: Kullanıcının enerjisine katılarak komutu hevesle yerine getirmek.",
+                    "Korku": "Ton: Güvence verici ve sakin. Amaç: Komutun güvenli bir şekilde uygulandığını vurgulamak.",
+                    "Şaşkınlık": "Ton: Açıklayıcı ve net. Amaç: Komutu nasıl yorumladığını ve uyguladığını şüpheye yer bırakmayacak şekilde anlatmak.",
+                    "Sevinç": "Ton: Pozitif ve katılımcı. Amaç: Kullanıcının sevincini paylaşarak komutu yerine getirmek."
                 }
 
                 tone_adjustment = command_emotion_map.get(emotion, "")
@@ -129,16 +128,21 @@ Kullanıcı bir komut/talimat verdi. Komutu doğru anlamak ve uygulamak için:
             Özelleştirilmiş talimatlar
         """
         return """
-Komutlara şu şekilde yanıt ver:
+Komutları işlerken aşağıdaki protokolü izle:
 
-1. ONAYLAMA: Komutu anladığını belirt
-2. UYGULAMA: Komutu net bir şekilde uygula veya simüle et
-3. BİLDİRİM: Uygulamanın sonucunu veya durumunu bildir
-4. AÇIKLAMA: Gerektiğinde ek bilgi veya açıklama ekle
+**Ana İş Akışı:**
+1. **ONAYLAMA:** Komutu anladığını kısa ve net bir şekilde belirt. (Örn: "Anlaşıldı, dosya oluşturuluyor.")
+2. **UYGULAMA:** Komutu istenen şekilde uygula.
+3. **BİLDİRİM:** İşlemin sonucunu bildir. (Örn: "`rapor.txt` dosyası başarıyla oluşturuldu." veya "Hata: Dosya zaten mevcut.")
+4. **AÇIKLAMA:** Gerekirse, yapılan işlemle ilgili kısa bir ek bilgi ver.
 
-Komut yanıtları kısa, öz ve yönlendirici olmalıdır. Uzun açıklamalardan ve gereksiz detaylardan kaçın.
-Komutu yerine getirirken açık bir dil kullan ve kullanıcının ne yapılmasını istediğinden emin olmadığında
-net bir şekilde sor.
+**Güvenlik ve Netleştirme Protokolleri (ÇOK ÖNEMLİ):**
+
+1. **BELİRSİZ KOMUTLAR:** Eğer bir komut belirsizse veya kritik bilgiler eksikse (örn. 'dosyayı sil' ama hangi dosya olduğu belirtilmemişse), komutu uygulamaya **ÇALIŞMA**. Bunun yerine, eksik olan bilgiyi netleştirmek için kullanıcıya bir soru sor. (Örn: "Elbette, hangi dosyayı silmemi istersiniz?")
+
+2. **TEHLİKELİ KOMUTLAR:** Geri döndürülemez veya potansiyel olarak tehlikeli bir komut (dosya silme, üzerine yazma, önemli verileri değiştirme vb.) istendiğinde, uygulamadan önce kullanıcıdan **net bir onay iste**. (Örn: "'veriler.csv' dosyasını kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz. [Evet/Hayır]")
+
+Komut yanıtları her zaman kısa, öz ve amaca yönelik olmalıdır.
 """
 
     def adjust_parameters(self) -> Dict[str, Any]:
@@ -149,8 +153,9 @@ net bir şekilde sor.
             LLM parametreleri sözlüğü
         """
         return {
-            "temperature": 0.4,  # Daha net ve doğrudan yanıtlar için orta-düşük sıcaklık
+            "temperature": 0.3,  # Net ve deterministik yanıtlar için düşük sıcaklık
             "top_p": 0.85,
             "max_tokens": 500,   # Komut yanıtları genellikle kısa olur
-            "presence_penalty": 0.0  # Komutlarda tekrarlama riski düşük
+            "presence_penalty": 0.0,  # Komutlarda tekrarlama riski düşük
+            "frequency_penalty": 0.1  # Hafif ceza, daha çeşitli ama yine de odaklı dil için
         }
