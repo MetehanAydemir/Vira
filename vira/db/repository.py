@@ -79,6 +79,75 @@ class UserRepository:
 class MemoryRepository:
     """Repository for memory operations using SQLAlchemy."""
 
+    def get_personality_data(self, user_id: str) -> Dict[str, Any]:
+        """
+        Kullanıcının kişilik verilerini getirir.
+
+        Args:
+            user_id: Kullanıcı kimliği
+
+        Returns:
+            Dict[str, Any]: Kişilik verileri
+        """
+        try:
+            # PersonalityRepository kullanarak kişilik verilerini al
+            personality_repo = PersonalityRepository()
+            personality_vector = personality_repo.get_personality_vector(user_id)
+
+            logger.info(f"Retrieved personality data for user {user_id}")
+            return personality_vector
+        except Exception as e:
+            logger.error(f"Failed to retrieve personality data: {e}")
+            return {}
+
+    def get_conversation_history(self, user_id: str, limit: int = 10, days: int = 7) -> List[Tuple[str, str, datetime]]:
+        """
+        Kullanıcının konuşma geçmişini getirir.
+
+        Args:
+            user_id: Kullanıcı kimliği
+            limit: Getirilecek maksimum konuşma sayısı
+            days: Kaç günlük konuşmaların getirileceği
+
+        Returns:
+            List[Tuple[str, str, datetime]]: (kullanıcı_mesajı, sistem_yanıtı, tarih) üçlülerinden oluşan liste
+        """
+        # Mevcut get_recent_conversations metodunu kullan
+        return self.get_recent_conversations(user_id, session_id=None, limit=limit)
+
+    def get_long_term_memories(self, user_id: str) -> List[Dict[str, Any]]:
+        """
+        Kullanıcının uzun süreli hafıza verilerini getirir.
+
+        Args:
+            user_id: Kullanıcı kimliği
+
+        Returns:
+            List[Dict[str, Any]]: Uzun süreli hafıza verileri
+        """
+        try:
+            with db_session() as session:
+                memories = session.scalars(
+                    select(LongTermMemory)
+                    .filter(LongTermMemory.metadatas['user_id'].astext == user_id)
+                    .order_by(desc(LongTermMemory.created_at))
+                    .limit(100)  # Makul bir limit
+                ).all()
+
+                result = []
+                for memory in memories:
+                    result.append({
+                        "content": memory.content,
+                        "created_at": memory.created_at,
+                        "metadata": memory.metadatas
+                    })
+
+                logger.info(f"Retrieved {len(result)} long term memories for user {user_id}")
+                return result
+        except Exception as e:
+            logger.error(f"Failed to retrieve long term memories: {e}")
+            return []
+
     def retrieve_similar_memories(self, user_id: str, embedding: np.ndarray, top_k: int = 3):
         """Retrieve the most similar memories based on embedding similarity."""
         try:

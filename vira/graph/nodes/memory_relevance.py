@@ -239,7 +239,7 @@ def memory_relevance_node(state: ViraState) -> ViraState:
     logger.info("--- Düğüm: memory_relevance_node (LLM Enhanced) ---")
 
     # Durumu kopyala (immutability için)
-    new_state = state.copy()
+    new_state = ViraState(state)
 
     # Gerekli verileri state'den al
     user_message = new_state.get("original_message", "")

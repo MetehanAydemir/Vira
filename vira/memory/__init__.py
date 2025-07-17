@@ -1,0 +1,3 @@
+"""
+Vira bellek yönetimi modülü.
+"""

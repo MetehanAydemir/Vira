@@ -100,12 +100,18 @@ def retrieve_memory_node(state: ViraState) -> ViraState:
     logger.info("--- Düğüm: retrieve_memory_node (Enhanced) ---")
 
     # Durumu kopyala (immutability için)
-    new_state = state.copy()
+    new_state = ViraState(state)
 
     # Gerekli verileri state'den al
     user_id = new_state.get("user_id")
     query_text = new_state.get("original_message")
     session_id = new_state.get("session_id", "default_session")
+
+    # [YENİ] Kullanıcı birleşik modelini al (varsa)
+    unified_model = None
+    if hasattr(new_state, "has_unified_user_model") and new_state.has_unified_user_model():
+        unified_model = new_state.get_unified_user_model()
+        logger.info(f"Kullanıcı {user_id} için birleşik model bulundu, hafıza erişimi zenginleştirilecek")
 
     # Başlangıç değerlerini ayarla
     new_state["memory_context"] = ""
@@ -134,6 +140,26 @@ def retrieve_memory_node(state: ViraState) -> ViraState:
                 embedding=query_embedding,
                 top_k=5
             )
+
+            # [YENİ] MetaCognitive ile hafıza erişimini zenginleştir
+            if unified_model and hasattr(repo, "enhance_memory_retrieval"):
+                try:
+                    # MetaCognitive Engine oluştur
+                    from vira.metacognition.engine import MetaCognitiveEngine
+                    engine = MetaCognitiveEngine(repo)
+
+                    # Hafızaları kullanıcı modeline göre zenginleştir
+                    enhanced_memories = engine.enhance_memory_retrieval(
+                        query=query_text,
+                        model=unified_model,
+                        memories=relevant_memories
+                    )
+
+                    relevant_memories = enhanced_memories
+                    logger.info("Hafıza erişimi MetaCognitive Engine ile zenginleştirildi")
+                except Exception as e:
+                    logger.error(f"MetaCognitive hafıza zenginleştirme sırasında hata: {e}")
+
             new_state["retrieved_memories"] = relevant_memories
             logger.info(f"{len(relevant_memories)} adet ilgili anı bulundu.")
 
@@ -156,10 +182,37 @@ def retrieve_memory_node(state: ViraState) -> ViraState:
                 session_id=session_id,
                 limit=5
             )
+
+            if unified_model:
+                # Kullanıcının tercih ettiği konulara göre son konuşmaları filtrele
+                preferred_topics = unified_model.conversation_patterns.get("preferred_topics", [])
+                if preferred_topics:
+                    # Tercih edilen konularla ilgili son konuşmaları vurgula
+                    for i, conv in enumerate(recent_conversations):
+                        user_msg, sys_msg, date = conv
+                        for topic in preferred_topics:
+                            if topic.lower() in user_msg.lower() or topic.lower() in sys_msg.lower():
+                                # Bu konuşmayı önemli olarak işaretle (listeyi tuple'dan liste yapısına çevirmek gerekebilir)
+                                # Bu örnekte sadece logluyoruz
+                                logger.debug(f"Tercih edilen konu bulundu: '{topic}' - Konuşma vurgulandı")
+
             new_state["recent_conversations"] = recent_conversations
             logger.info(f"{len(recent_conversations)} adet son konuşma bulundu.")
         except Exception as e:
             logger.error(f"Kısa süreli hafıza alınırken hata: {e}")
+
+        # [YENİ] MetaCognitive önerilerine göre hafıza bağlamını şekillendirme
+        metacognitive_insights = {}
+        if unified_model:
+            # MetaCognitive engine'in kullanıcı anlayışından faydalanarak ek bağlam öner
+            metacognitive_insights = {
+                "preferred_interaction_style": unified_model.current_state.get("interaction_mode", ""),
+                "emotional_tone": unified_model.current_state.get("emotional_state", {}).get("primary", ""),
+                "recurring_themes": unified_model.memory_themes.get("dominant_topics", [])[:3],
+                "response_style_preference": unified_model.conversation_patterns.get("response_styles", {})
+            }
+            new_state["metacognitive_insights"] = metacognitive_insights
+            logger.debug(f"MetaCognitive insights eklendi: {metacognitive_insights}")
 
         # 3. Hafıza bağlamını oluştur
         memory_context = ""
@@ -179,6 +232,23 @@ def retrieve_memory_node(state: ViraState) -> ViraState:
                 if memory_context:
                     memory_context += "\n\n"
                 memory_context += conversation_text
+
+        # [YENİ] 3.3 MetaCognitive Engine önerileri varsa ekle
+        if metacognitive_insights and any(metacognitive_insights.values()):
+            if memory_context:
+                memory_context += "\n\n"
+
+            # Anlamlı önerileri formatla
+            meta_context = "🧠 MetaCognitive İçgörüler:\n"
+            if metacognitive_insights.get("preferred_interaction_style"):
+                meta_context += f"- Tercih edilen etkileşim stili: {metacognitive_insights['preferred_interaction_style']}\n"
+            if metacognitive_insights.get("emotional_tone"):
+                meta_context += f"- Mevcut duygusal ton: {metacognitive_insights['emotional_tone']}\n"
+            if metacognitive_insights.get("recurring_themes"):
+                themes = ", ".join(metacognitive_insights["recurring_themes"])
+                meta_context += f"- Tekrarlayan temalar: {themes}\n"
+
+            memory_context += meta_context
 
         # 4. Formatlanmış bağlamı state'e ekle
         new_state["memory_context"] = memory_context.strip()

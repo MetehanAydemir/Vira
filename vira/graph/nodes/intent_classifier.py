@@ -3,6 +3,8 @@ from vira.graph.state import ViraState
 from vira.config import settings
 from vira.utils.logger import get_logger
 from vira.utils.llm_client import call_chat_model
+from vira.metacognition.engine import MetaCognitiveEngine
+import re
 
 logger = get_logger(__name__)
 
@@ -101,18 +103,41 @@ Analizini yaptıktan sonra, kararını SADECE aşağıdaki formatta ver. Başka 
             max_tokens=50
         )
 
-        llm_intent = response.strip().lower()
+        # Yanıtı işleme - daha esnek hale getirildi
+        raw_response = response.strip().lower()
+        logger.debug(f"LLM'den alınan ham yanıt: {raw_response}")
 
         # Özel durum: 0427 kodu varsa Omega intent'ini döndür
         if "0427" in message:
             logger.info("Omega protokolü kodu tespit edildi.")
             return IntentType.OMEGA
 
-        if llm_intent in VALID_INTENTS:
-            logger.info(f"LLM tarafından belirlenen niyet: {llm_intent}")
-            return llm_intent
+        # XML etiketlerini işleme - çeşitli format olasılıklarını ele al
+        intent = raw_response
+
+        # 1. <intent>niyet</intent> formatını işle
+        intent_match = re.search(r'<intent>(.*?)</intent>', raw_response)
+        if intent_match:
+            intent = intent_match.group(1).strip()
+            logger.debug(f"XML etiketleri arasından niyet çıkarıldı: {intent}")
+        # 2. Basit metin işleme ile etiketleri temizlemeyi dene
+        elif raw_response.startswith('<intent>') and raw_response.endswith('</intent>'):
+            intent = raw_response.replace('<intent>', '').replace('</intent>', '').strip()
+            logger.debug(f"String işleme ile niyet çıkarıldı: {intent}")
+        # 3. Yalnızca geçerli niyet kelimelerini ara
         else:
-            logger.warning(f"LLM geçersiz bir niyet döndürdü: '{llm_intent}'. Varsayılan olarak 'unknown' kullanılıyor.")
+            for valid_intent in VALID_INTENTS:
+                if valid_intent in raw_response:
+                    intent = valid_intent
+                    logger.debug(f"Ham yanıttan geçerli niyet bulundu: {intent}")
+                    break
+
+        if intent in VALID_INTENTS:
+            logger.info(f"LLM tarafından belirlenen niyet: {intent}")
+            return intent
+        else:
+            logger.warning(
+                f"LLM geçersiz bir niyet döndürdü: '{raw_response}' -> '{intent}'. Varsayılan olarak 'unknown' kullanılıyor.")
             return IntentType.UNKNOWN
 
     except Exception as e:
@@ -133,7 +158,7 @@ def intent_classifier_node(state: ViraState) -> ViraState:
     logger.info("--- Düğüm: intent_classifier_node ---")
 
     # Durumu kopyala (immutability için)
-    new_state = state.copy()
+    new_state = ViraState(state)
 
     # Gerekli verileri state'den al
     message = new_state.get("original_message", "")
@@ -148,6 +173,28 @@ def intent_classifier_node(state: ViraState) -> ViraState:
                     "content": msg.content
                 })
 
+    # [YENİ] MetaCognitive Engine entegrasyonu: Birleşik kullanıcı modeli kontrolü
+    unified_model = None
+    #TODO Meta Cognitive not completed.
+    if (new_state['unified_user_model'] is not None) and (new_state['unified_user_model'] is None):
+        unified_model = new_state['unified_user_model']
+        logger.info("Birleşik kullanıcı modeli bulundu. MetaCognitive niyet geliştirmeleri etkinleştirildi.")
+
+    # [YENİ] Eğer birleşik model mevcutsa, LLM isteklerini kişiselleştir
+    if unified_model:
+        # Kişilik eğilimleri ve tercihlerine göre LLM isteklerini ayarla
+        # Örneğin: Mizahi kişilik profiline sahipse bunu LLM'e bildir
+        personality_context = ""
+        if unified_model.personality_trends.get("humor", {}).get("current", 0) > 0.7:
+            personality_context = "Kullanıcı genellikle mizahi bir yaklaşımı tercih eder. "
+        if unified_model.personality_trends.get("curiosity", {}).get("current", 0) > 0.7:
+            personality_context += "Kullanıcı genellikle derin düşünmeyi ve keşfetmeyi tercih eder. "
+
+        if personality_context:
+            logger.debug(f"LLM'e kişilik bağlamı eklendi: {personality_context}")
+            # Bu bilgiyi LLM çağrısında kullanmak için kodları buraya ekleyebiliriz
+            # Şu an için sadece logluyoruz
+
     # Niyet belirleme
     if not message:
         logger.warning("Intent tespiti için mesaj bulunamadı. 'unknown' olarak ayarlandı.")
@@ -156,12 +203,71 @@ def intent_classifier_node(state: ViraState) -> ViraState:
         # Artık doğrudan LLM sınıflandırmasını kullan
         intent = call_llm_for_intent(message, history)
 
+    # [YENİ] MetaCognitive Engine ile niyet geliştirme
+    if unified_model and intent != IntentType.OMEGA:  # Omega komutları dokunulmaz kalır
+        try:
+            # MetaCognitive Engine oluştur
+            engine = MetaCognitiveEngine()
+
+            # Niyeti kullanıcı modeliyle geliştir
+            enhanced_intent = engine.enhance_intent_classification(intent, unified_model)
+
+            if enhanced_intent != intent:
+                logger.info(f"Niyet MetaCognitive Engine ile geliştirildi: {intent} -> {enhanced_intent}")
+                intent = enhanced_intent
+
+            # [YENİ] Kişilik profiline göre belirsiz niyetleri geliştir
+            if intent == IntentType.UNKNOWN:
+                # Kişilik özelliklerine göre belirsiz niyetleri yorumla
+                if unified_model.personality_trends.get("curiosity", {}).get("current", 0) > 0.7:
+                    # Meraklı kişilik profili için belirsiz ifadeleri soru olarak yorumla
+                    intent = IntentType.QUESTION
+                    logger.debug("Belirsiz niyet, kişilik profiline göre 'question' olarak yorumlandı")
+                elif unified_model.personality_trends.get("empathy", {}).get("current", 0) > 0.7:
+                    # Empatik kişilik profili için belirsiz ifadeleri duygusal olarak yorumla
+                    intent = IntentType.EMOTIONAL
+                    logger.debug("Belirsiz niyet, kişilik profiline göre 'emotional' olarak yorumlandı")
+
+            # [YENİ] Konuşma örüntülerine göre niyet düzeltmesi
+            preferred_topics = unified_model.conversation_patterns.get("preferred_topics", [])
+            if preferred_topics:
+                # Kullanıcının tercih ettiği konuları kontrol et
+                for topic in preferred_topics:
+                    if topic.lower() in message.lower():
+                        if "philosophical" in topic.lower() and intent == IntentType.INFORMATION:
+                            intent = IntentType.PHILOSOPHICAL
+                            logger.debug(f"Niyet, tercih edilen konu '{topic}' nedeniyle 'philosophical' olarak güncellendi")
+                        elif "creative" in topic.lower() and intent in [IntentType.REQUEST, IntentType.INFORMATION]:
+                            intent = IntentType.CREATIVE_REQUEST
+                            logger.debug(f"Niyet, tercih edilen konu '{topic}' nedeniyle 'creative_request' olarak güncellendi")
+                        # Diğer tema-niyet eşleştirmeleri eklenebilir
+
+            # [YENİ] Duygu durumuna göre niyet zenginleştirme
+            current_emotion = unified_model.current_state.get("emotional_state", {}).get("primary", "")
+            if current_emotion:
+                # Duygu durumunu niyet sınıflandırıcıya ekleyen mantık
+                new_state["emotional_context"] = current_emotion
+                logger.debug(f"Duygu durumu bağlamı eklendi: {current_emotion}")
+
+        except Exception as e:
+            logger.error(f"MetaCognitive niyet geliştirme sırasında hata: {e}", exc_info=True)
+
     # Processed input'u güncelle
     if "processed_input" not in new_state:
         new_state["processed_input"] = {}
 
     new_state["processed_input"]["intent"] = intent
     new_state["is_omega_command"] = (intent == IntentType.OMEGA)
+
+    # [YENİ] MetaCognitive bilgileri ekle
+    if unified_model:
+        new_state["processed_input"]["metacognitive_context"] = {
+            "personality_match": True,  # Niyet kişilik profiline uyumlu mu?
+            "confidence_boost": unified_model.personality_trends.get(
+                "assertiveness", {}).get("current", 0),  # Kendine güven seviyesi
+            "emotional_state": unified_model.current_state.get("emotional_state", {}),
+            "interaction_mode": unified_model.current_state.get("interaction_mode", "")
+        }
 
     logger.info(f"Belirlenen niyet: {intent} (Mesaj: {message[:30]}...)")
     return new_state
