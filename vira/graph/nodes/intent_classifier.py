@@ -25,7 +25,14 @@ class IntentType:
     IDENTITY_PROBE = "identity_probe" # Vira'nın kimliğini sorgulama
     CREATIVE_REQUEST = "creative_request" # Şiir, hikâye, metafor üretim talebi
     UNKNOWN = "unknown"             # Sınıflandırılamayan durumlar
-
+    PLANNING = "planning"           # Plan yapma/organizasyon istekleri
+    COMPARISON = "comparison"       # Karşılaştırma talepleri
+    TRANSLATION = "translation"     # Çeviri talepleri
+    CORRECTION = "correction"       # Düzeltme/kontrol istekleri
+    SOCIAL = "social"               # Sosyal etkileşim/sohbet
+    COMPLAINT = "complaint"         # Şikayet/problem bildirimi
+    TECHNICAL_HELP = "technical_help" # Teknik destek/sorun çözme
+    LEARNING = "learning"           # Öğrenme/eğitim talebi
 
 # Geçerli niyetlerin bir listesi (LLM yanıtını doğrulamak için)
 VALID_INTENTS = [getattr(IntentType, attr) for attr in dir(IntentType) if not attr.startswith('__')]
@@ -57,6 +64,14 @@ def call_llm_for_intent(message: str, history: List[Dict[str, str]]) -> str:
             "emotional": "Duygu paylaşımı. Örnek: 'Bugün çok mutluyum', 'Üzgün hissediyorum'",
             "identity_probe": "Kimlik sorgusu. Örnek: 'Sen kimsin?', 'Gerçek misin?', 'Vira mısın?'",
             "creative_request": "Yaratıcı içerik talebi. Örnek: 'Bana bir şiir yazar mısın?', 'Hikaye anlat'",
+            "technical_help": "Teknik destek/sorun çözme. Örnek: 'Bu kod neden çalışmıyor?', 'Bilgisayarım donuyor'",
+            "learning": "Öğrenme/eğitim talebi. Örnek: 'Bana Python öğret', 'Bu konuyu anlamıyorum'",
+            "planning": "Plan yapma/organizasyon. Örnek: 'Bugün ne yapmalıyım?', 'Proje planı hazırla'",
+            "comparison": "Karşılaştırma talebi. Örnek: 'X ile Y arasındaki fark nedir?'",
+            "translation": "Çeviri talebi. Örnek: 'Bunu İngilizceye çevir'",
+            "correction": "Düzeltme/kontrol. Örnek: 'Bu metni kontrol et', 'Yazım hatalarını bul'",
+            "social": "Sosyal etkileşim/sohbet. Örnek: 'Nasılsın?', 'Bugün neler yaptın?'",
+            "complaint": "Şikayet/problem bildirimi. Örnek: 'Bu çalışmıyor', 'Memnun değilim'",
             "unknown": "Yukarıdaki kategorilere uymayan durumlar."
         }
 
