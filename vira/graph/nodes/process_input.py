@@ -1,69 +1,162 @@
-from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
+import re
+import emoji
+import datetime
+from dataclasses import dataclass, asdict
+from vira.utils.logger import get_logger
 
-from vira.graph.state import ViraState
+# Dil tespiti için gerekli kütüphane (pip install langdetect)
+try:
+    from langdetect import detect, LangDetectException
 
-def process_input_node(state: ViraState) -> Dict[str, Any]:
+    HAS_LANGDETECT = True
+except ImportError:
+    HAS_LANGDETECT = False
+
+logger = get_logger(__name__)
+
+
+@dataclass
+class MessageMetadata:
+    """Kullanıcı mesajından çıkarılan meta verileri yapılandıran veri sınıfı."""
+    # Yapısal Özellikler
+    has_link: bool = False
+    has_code: bool = False
+    has_mention: bool = False
+    has_hashtag: bool = False
+
+    # İçerik Özellikleri
+    has_emoji: bool = False
+    emojis: List[str] = None
+    word_count: int = 0
+    char_count: int = 0
+    message_type: str = "statement"
+    detected_language: Optional[str] = None
+
+    # Stil ve Zaman Özellikleri
+    formality_score: float = 0.0
+    timestamp: Optional[str] = None
+    hour_of_day: Optional[int] = None
+    day_name_tr: Optional[str] = None
+    is_weekend: bool = False
+    time_period: Optional[str] = None  # sabah, öğlen, akşam, gece
+
+
+class MetadataExtractor:
+    """Mesaj metninden ve zaman damgasından meta verileri çıkaran sınıf."""
+
+    _FORMAL_WORDS = {"merhaba", "iyi günler", "rica ederim", "teşekkür ederim", "saygılarımla", "efendim", "sayın",
+                     "müsaadenizle", "lütfen", "buyurun", "affedersiniz", "özür dilerim"}
+    _INFORMAL_WORDS = {"selam", "hey", "nbr", "naber", "merhba", "tşk", "eyw", "eyv", "hacı", "moruk", "kanka", "abi",
+                       "abicim", "knk", "kardeş", "yaa", "yav", "valla", "vallahi", "çakmak", "tmm", "ok"}
+
+    def extract(self, message: str, timestamp: Optional[str]) -> MessageMetadata:
+        """Tüm meta verileri çıkarır ve bir MessageMetadata nesnesi döndürür."""
+        emojis = self._extract_emojis(message)
+        time_features = self._parse_timestamp(timestamp)
+        formality_score = self._detect_formality(message)
+
+        metadata = MessageMetadata(
+            # Yapısal
+            has_link=bool(re.search(r"https?://\S+", message)),
+            has_code="```" in message or "`" in message,
+            has_mention="@" in message,
+            has_hashtag="#" in message,
+            # İçerik
+            has_emoji=bool(emojis),
+            emojis=emojis,
+            word_count=len(re.findall(r'\w+', message)),
+            char_count=len(message),
+            message_type="question" if "?" in message else "statement",
+            detected_language=self._detect_language(message),
+            # Stil ve Zaman
+            formality_score=formality_score,
+            timestamp=timestamp,
+            **time_features
+        )
+        return metadata
+
+    def _extract_emojis(self, text: str) -> List[str]:
+        return [char for char in text if char in emoji.EMOJI_DATA]
+
+    def _detect_language(self, text: str) -> Optional[str]:
+        if not HAS_LANGDETECT or len(text) <= 10:
+            return None
+        try:
+            return detect(text)
+        except LangDetectException:
+            return None
+
+    def _parse_timestamp(self, timestamp: Optional[str]) -> Dict[str, Any]:
+        if not timestamp:
+            return {}
+        try:
+            ts = datetime.datetime.fromisoformat(timestamp)
+            hour = ts.hour
+
+            if 5 <= hour < 12:
+                period = "sabah"
+            elif 12 <= hour < 17:
+                period = "öğlen"
+            elif 17 <= hour < 22:
+                period = "akşam"
+            else:
+                period = "gece"
+
+            return {
+                "hour_of_day": hour,
+                "day_name_tr": ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"][
+                    ts.weekday()],
+                "is_weekend": ts.weekday() >= 5,
+                "time_period": period
+            }
+        except (ValueError, TypeError):
+            logger.warning(f"Timestamp ayrıştırma hatası: {timestamp}")
+            return {}
+
+    def _detect_formality(self, text: str) -> float:
+        words = set(re.findall(r'\w+', text.lower()))
+        formal_count = len(words.intersection(self._FORMAL_WORDS))
+        informal_count = len(words.intersection(self._INFORMAL_WORDS))
+
+        score = formal_count - informal_count
+        if bool(re.search(r'[.!?]', text)): score += 1
+        if bool(re.search(r'[A-ZĞÜŞİÖÇ][^.!?]*[.!?]', text)): score += 1
+
+        # Normalizasyon (basit bir yaklaşım)
+        total_signals = formal_count + informal_count + 2
+        return max(-1.0, min(1.0, score / total_signals if total_signals > 0 else 0))
+
+    def format_log_summary(self, metadata: MessageMetadata, message_preview: str) -> str:
+        """Loglama için özet bir metin oluşturur."""
+        formality_desc = "resmi" if metadata.formality_score > 0.3 else "samimi" if metadata.formality_score < -0.3 else "nötr"
+        time_context = f", {metadata.day_name_tr} {metadata.time_period}" if metadata.day_name_tr else ""
+
+        return (f"İşlenmiş girdi: {message_preview}... ({len(metadata.emojis)} emoji, "
+                f"{formality_desc} ton{time_context})")
+
+
+def process_input_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Kullanıcı girdisini analiz eder, duygu/niyet çıkarır ve özel komutları tespit eder.
-    Bu düğüm, orijinal koddaki SensoryProxy'nin işlevini taklit eder.
+    Kullanıcı girdisini işleyen LangGraph düğümü. Meta veri çıkarımı için
+    MetadataExtractor sınıfını kullanır.
     """
-    user_message = state["original_message"]
-    user_id = state["user_id"]
+    new_state = state.copy()
+    message = new_state.get("original_message", "").strip()
+    timestamp = new_state.get("timestamp")
 
-    # Orijinal ChatMessageInput.analyze() mantığını buraya taşı
-    text = user_message.lower().strip()
-    emotion = "Sakin"  # Varsayılan duygu
-    metadata = {}
+    # 1. Sorumluluğu delege et: Meta verileri extractor ile çıkar
+    extractor = MetadataExtractor()
+    metadata = extractor.extract(message, timestamp)
 
-    # Duygu/niyet anahtar kelime kümeleri
-    curiosity_keywords = ['?', 'nasıl', 'neden', 'hangi', 'kim', 'ne zaman', 'nerede']
-    supportive_keywords = ['teşekkür', 'harika', 'iyi iş', 'mükemmel', 'tebrik', 'sevgili', 'beğendim', 'seviyorum']
-    anxious_keywords = ['zor', 'problem', 'korkuyorum', 'anlamıyorum', 'endişe', 'kötü', 'üzgün', 'zorlanıyorum']
-    motivational_keywords = ['yapabilirsin', 'dene', 'bence', 'olabilir', 'harika olur', 'başarabilirsin', 'güzel fikir', 'devam et']
-    reflective_keywords = ['düşünmek', 'aklıma geldi', 'belki', 'önemli', 'fikir', 'öneri', 'gözlem']
-    neutral_keywords = ['merhaba', 'selam', 'tamam', 'peki', 'evet', 'hayır']
-
-    # Duygu ataması
-    if not text:
-        emotion = "Belirsiz"
-    elif any(word in text for word in curiosity_keywords):
-        emotion = "Meraklı"
-    elif any(word in text for word in supportive_keywords):
-        emotion = "Destekleyici"
-    elif any(word in text for word in anxious_keywords):
-        emotion = "Endişeli"
-    elif any(word in text for word in motivational_keywords):
-        emotion = "Motivasyonel"
-    elif any(word in text for word in reflective_keywords):
-        emotion = "Yansıtıcı"
-    elif any(word in text for word in neutral_keywords):
-        emotion = "Nötr"
-    else:
-        emotion = "Sakin"
-
-    # Metadata güncellemeleri
-    metadata['contains_question'] = any(q in text for q in curiosity_keywords)
-    metadata['length'] = len(text)
-
-    # İşlenmiş girdi verisini oluştur
-    processed_input_data = {
-        'content': user_message,
-        'timestamp': datetime.now().isoformat(),
-        'emotion': emotion,
-        'user_id': user_id,
-        'input_type': 'chat_message',
-        'metadata': metadata
+    # 2. State'i güncelle: Yapılandırılmış veriyi state'e ekle
+    new_state["processed_input"] = {
+        "cleaned_message": message,
+        "meta": asdict(metadata)  # Dataclass'ı state uyumluluğu için dict'e çevir
     }
 
-    # Özel komut kontrolü
-    is_omega_command = text == "0427"
+    # 3. Temiz loglama
+    log_summary = extractor.format_log_summary(metadata, message[:30])
+    logger.info(log_summary)
 
-    print(f"--- Düğüm: process_input_node ---")
-    print(f"Duygu: {emotion}")
-    print(f"Omega Komutu mu?: {is_omega_command}")
-
-    return {
-        "processed_input": processed_input_data,
-        "is_omega_command": is_omega_command
-    }
+    return new_state
