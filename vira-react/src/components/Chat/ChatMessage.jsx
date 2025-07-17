@@ -35,6 +35,14 @@ const ChatMessage = ({ message, isLastMessage, isTyping }) => {
             ul: ({node, ...props}) => <ul className="markdown-list" {...props} />,
             ol: ({node, ...props}) => <ol className="markdown-list" {...props} />,
             li: ({node, ...props}) => <li className="markdown-list-item" {...props} />,
+            // Paragrafları düzgün gösterme
+            p: ({node, ...props}) => <p className="markdown-paragraph" {...props} />,
+            // Başlıkları düzgün gösterme
+            h1: ({node, ...props}) => <h1 className="markdown-heading" {...props} />,
+            h2: ({node, ...props}) => <h2 className="markdown-heading" {...props} />,
+            h3: ({node, ...props}) => <h3 className="markdown-heading" {...props} />,
+            h4: ({node, ...props}) => <h4 className="markdown-heading" {...props} />,
+            h5: ({node, ...props}) => <h5 className="markdown-heading" {...props} />,
           }}>
             {content}
           </ReactMarkdown>

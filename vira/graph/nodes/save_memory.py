@@ -8,7 +8,7 @@ from typing import Dict, Any, List
 from datetime import datetime
 
 from vira.graph.state import ViraState
-from vira.db.repository import MemoryRepository
+from vira.db.repository import MemoryRepository, PersonalityRepository
 from vira.utils.logger import get_logger
 from vira.utils.openai_client import get_openai_client
 from vira.utils.embedding import create_embedding
@@ -70,7 +70,7 @@ def create_rich_metadata(state: ViraState) -> Dict[str, Any]:
         Dict[str, Any]: Metadata sözlüğü
     """
     metadata = {
-        "user_id": state["user_id"],
+        "user_id": state.get("user_id"),
         "importance_score": state.get("importance_score", 0.0),
         "timestamp": datetime.now().isoformat(),
         "source": "conversation",
@@ -119,7 +119,8 @@ def save_memory_node(state: ViraState) -> ViraState:
     logger.info("--- Düğüm: save_memory_node (Enhanced) ---")
 
     # Durumu kopyala (immutability için)
-    new_state = state.copy()
+    new_state = ViraState(state)
+
 
     # Gerekli verileri state'den al
     user_id = new_state["user_id"]
@@ -131,6 +132,14 @@ def save_memory_node(state: ViraState) -> ViraState:
     if not user_message or not ai_response:
         logger.warning("Kaydedilecek mesaj veya yanıt bulunamadı.")
         new_state["memory_saved"] = False
+
+        # Hata durumunda bile dynamic_personality değişkenini güncelle
+        # Bu şekilde LangGraph'in beklediği değişken güncellemesi gerçekleşir
+        if "dynamic_personality" in state:
+            new_state["dynamic_personality"] = state["dynamic_personality"]
+        else:
+            new_state["dynamic_personality"] = {}
+
         return new_state
 
     # Etkileşim metnini hazırla
@@ -196,6 +205,28 @@ def save_memory_node(state: ViraState) -> ViraState:
             logger.info(
                 f"Etkileşim uzun süreli hafızaya kaydedilmedi (Skor: {new_state.get('importance_score', 0.0):.2f})")
 
+        # 4. YENİ EKLENDİ: Kişilik verilerini güncelle veya aynı tut
+        try:
+            # Eğer mevcut dynamic_personality varsa, onu yeni state'e aktar
+            if "dynamic_personality" in state:
+                new_state["dynamic_personality"] = state["dynamic_personality"]
+
+                # Opsiyonel: Eğer personality güncellemesi yapmak istenirse
+                # Bu kısım kişiliği güncellemek için kullanılabilir
+                personality_repo = PersonalityRepository()
+                personality = state["dynamic_personality"]
+
+                # Kişilik değişimleri için log oluştur (gerçek uygulamada bu kişiliği de kaydedebilir)
+                logger.debug(f"Kişilik durumu korundu: {personality}")
+            else:
+                # Eğer yoksa, boş bir değer ekle
+                new_state["dynamic_personality"] = {}
+                logger.debug("Dynamic personality bulunamadı, boş bir değer eklendi")
+        except Exception as e:
+            logger.error(f"Kişilik verisi güncellenirken hata: {e}")
+            # Hata olsa bile mutlaka bu değişkeni ata
+            new_state["dynamic_personality"] = state.get("dynamic_personality", {})
+
         # State'i güncelle
         new_state["memory_saved"] = True
         new_state["session_id"] = session_id
@@ -203,5 +234,11 @@ def save_memory_node(state: ViraState) -> ViraState:
     except Exception as e:
         logger.error(f"Hafıza kaydedilirken hata oluştu: {e}", exc_info=True)
         new_state["memory_saved"] = False
+
+        # Genel hata durumunda bile dynamic_personality'yi güncelle
+        if "dynamic_personality" in state:
+            new_state["dynamic_personality"] = state["dynamic_personality"]
+        else:
+            new_state["dynamic_personality"] = {}
 
     return new_state

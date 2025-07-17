@@ -14,6 +14,7 @@ from vira.graph.nodes.prepare_prompt import prepare_prompt_node
 from vira.graph.nodes.generate_response import generate_response_node
 from vira.graph.nodes.memory_relevance import memory_relevance_node
 from vira.graph.nodes.save_memory import save_memory_node
+from vira.graph.nodes.build_mental_model import build_mental_model_node
 
 # --- Kenar Karar Fonksiyonları ---
 def should_continue(state: ViraState):
@@ -30,6 +31,7 @@ workflow = StateGraph(ViraState)
 
 # 1. Düğümleri Tanımla
 workflow.add_node("process_input", process_input_node)
+workflow.add_node("build_mental_model", build_mental_model_node)
 workflow.add_node("intent_classifier", intent_classifier_node)
 workflow.add_node("handle_omega", handle_omega_node)
 workflow.add_node("retrieve_memory", retrieve_memory_node)
@@ -43,12 +45,13 @@ workflow.add_node("save_memory", save_memory_node)
 # Giriş noktası
 workflow.set_entry_point("process_input")
 
-# Yeni akış: process_input -> intent_classifier
-workflow.add_edge("process_input", "intent_classifier")
+# Yeni akış: process_input -> build_mental_model -> intent_classifier
+workflow.add_edge("process_input", "build_mental_model")  # YENİ EKLENEN
+workflow.add_edge("build_mental_model", "intent_classifier")  # YENİ EKLENEN
 
 # Koşullu kenar: intent_classifier'dan sonra Omega kontrolü
 workflow.add_conditional_edges(
-    "intent_classifier",  # Değiştirilen kısım (process_input yerine)
+    "intent_classifier",
     should_continue,
     {
         "handle_omega": "handle_omega",
@@ -60,8 +63,8 @@ workflow.add_conditional_edges(
 workflow.add_edge("retrieve_memory", "context_refiner")
 workflow.add_edge("context_refiner", "prepare_prompt")
 workflow.add_edge("prepare_prompt", "generate_response")
-workflow.add_edge("generate_response", "memory_relevance")  # Değiştirilen kısım
-workflow.add_edge("memory_relevance", "save_memory")  # Yeni eklenen kenar
+workflow.add_edge("generate_response", "memory_relevance")
+workflow.add_edge("memory_relevance", "save_memory")
 
 # Bitiş noktaları
 workflow.add_edge("handle_omega", END)

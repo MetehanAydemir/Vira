@@ -3,6 +3,7 @@
 Vira FastAPI - LangGraph tabanlı API arayüzü
 """
 import os
+from vira.graph.state import ViraState
 from typing import Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -317,49 +318,52 @@ async def chat(request: ChatRequest):
     Vira ile sohbet et
     """
     try:
-        # Kullanıcının varlığını kontrol et
+        # Validate user existence
         user = user_repository.get_user_by_id(request.user_id)
 
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Kullanıcı bulunamadı"
+                detail="User not found"
             )
 
-        # Başlangıç durumunu hazırla
-        initial_state = {
+        # Initialize the state as a ViraState object
+        initial_state = ViraState({
             "user_id": request.user_id,
             "original_message": request.message,
             "processed_input": {},
             "memory_context": "",
             "messages": [],
             "response": "",
-            "is_omega_command": False
-        }
+            "is_omega_command": False,
+            "dynamic_personality": {}
+        })
 
-        logger.info(f"Chat isteği: {request.user_id}, Mesaj: {request.message[:30]}...")
+        logger.info(f"Chat request: {request.user_id}, Message: {request.message[:30]}...")
+        logger.info(f"Initial state: {initial_state}")  # Eklenen debug satırı
 
         try:
-            # LangGraph'ı çağır - eski sürümle uyumlu
-            config = {"recursion_limit": 25}  # Sonsuz döngülerden kaçınmak için
+            config = {"recursion_limit": 25}  # Prevent infinite loops
             final_state = app.invoke(initial_state, config=config)
 
-            # Yanıtı oluştur
+            #logger.info(f"Final state: {final_state}")  # Eklenen debug satırı
+            logger.info(f"Response: {final_state.get('response', 'No response')}")
+
             return ChatResponse(
                 response=final_state["response"],
                 memory_context=final_state.get("memory_context", "")
             )
         except Exception as e:
-            logger.error(f"LangGraph çalıştırma hatası: {e}")
+            logger.error(f"LangGraph execution error: {e}")
             logger.error(traceback.format_exc())
             return ChatResponse(
-                response="Üzgünüm, bir hata oluştu ve yanıt üretemedim. Teknik ekibimiz bilgilendirildi.",
+                response="Sorry, an error occurred and I couldn't generate a response. The technical team has been notified.",
                 memory_context=""
             )
 
     except Exception as e:
-        logger.error(f"Sohbet sırasında hata oluştu: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"İşlem sırasında hata oluştu: {str(e)}")
+        logger.error(f"Error during chat: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"An error occurred during processing: {str(e)}")
 
 
 @api.get("/health")
