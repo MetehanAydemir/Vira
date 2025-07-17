@@ -44,7 +44,13 @@ Analiz kriterleri:
   "should_remember": true/false,
   "reason": "neden hatırlanmalı/hatırlanmamalı"
 }}
-
+- identity_event (kimlik/kişilik ile ilgili)
+- emotional_bond (duygusal bağ)
+- factual_info (bilgi/gerçek)
+- reflection (düşünce/yansıma)
+- insight (kavrayış/anlayış)
+- casual (gündelik sohbet)
+- command (komut/direktif)
 Yanıtını sadece geçerli JSON formatında ver, başka açıklama ekleme.
 """
     try:
@@ -60,9 +66,10 @@ Yanıtını sadece geçerli JSON formatında ver, başka açıklama ekleme.
             temperature=0.2,
             max_tokens=500
         )
+        cleaned_content = re.sub(r'```json\n?|```|\n', '', response_text)
 
-        # JSON yanıtını parse et
-        return json.loads(response_text)
+
+        return json.loads(cleaned_content)
     except Exception as e:
         logger.error(f"LLM anlamsal analiz sırasında hata: {e}", exc_info=True)
         # Hata durumunda varsayılan değerler döndür
@@ -171,7 +178,8 @@ def calculate_importance_score(message: str, response: str, state: ViraState, ll
         logger.warning(f"LLM analizi başarısız: {e}")
 
     # Kritik Komutlar (yüksek öncelik)
-    priority_commands = ["unutma", "hatırla", "not et", "kaydet", "0427", "manifesto"]
+    priority_commands = ["unutma", "hatırla", "not et", "kaydet", "0427", "manifesto",
+                         'etik anlayışı', 'iş birliği','şeffaflık']
     for keyword in priority_commands:
         if keyword in message.lower():
             base_score += 0.4
@@ -215,7 +223,7 @@ def calculate_importance_score(message: str, response: str, state: ViraState, ll
     final_score = min(1.0, base_score)
 
     logger.debug(f"Önem skoru: {final_score:.2f}, Sebepler: {reasons}")
-    return final_score, reasons
+    return final_score, reasons, semantic_analysis
 
 
 def memory_relevance_node(state: ViraState) -> ViraState:
@@ -245,12 +253,12 @@ def memory_relevance_node(state: ViraState) -> ViraState:
         return new_state
 
     # Gelişmiş önem skoru hesapla
-    importance_score, reasons = calculate_importance_score(
+    importance_score, reasons, semantic_analyze = calculate_importance_score(
         user_message, ai_response, new_state
     )
 
     # Dinamik threshold hesapla
-    base_threshold = 0.4
+    base_threshold = 0.45
 
     # Kişiliğe göre threshold ayarla
     if "dynamic_personality" in new_state:
@@ -276,19 +284,19 @@ def memory_relevance_node(state: ViraState) -> ViraState:
     should_promote = importance_score >= threshold
 
     # Hafıza tipi sınıflandırması
-    try:
-        memory_type = classify_memory_type(user_message, ai_response)
-    except:
-        memory_type = "casual"
+    #try:
+    #    memory_type = classify_memory_type(user_message, ai_response)
+    #except:
+    #    memory_type = "casual"
 
     # State'i güncelle
-    new_state["importance_score"] = importance_score
-    new_state["importance_score_reasons"] = reasons
-    new_state["should_promote_to_long_term"] = should_promote
-    new_state["memory_threshold_used"] = threshold
-    new_state["memory_type"] = memory_type
+    state["importance_score"] = importance_score
+    state["importance_score_reasons"] = reasons
+    state["should_promote_to_long_term"] = should_promote
+    state["memory_threshold_used"] = threshold
+    state["memory_type"] = semantic_analyze['memory_type']
 
     logger.info(f"Önem skoru: {importance_score:.2f}, Threshold: {threshold:.2f}, Yükseltme: {should_promote}")
-    logger.info(f"Hafıza tipi: {memory_type}, Sebepler: {reasons}")
+    logger.info(f"Hafıza tipi: {semantic_analyze['memory_type']}, Sebepler: {reasons}")
 
-    return new_state
+    return state

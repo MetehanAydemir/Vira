@@ -141,16 +141,15 @@ def process_input_node(state: Dict[str, Any]) -> Dict[str, Any]:
     Kullanıcı girdisini işleyen LangGraph düğümü. Meta veri çıkarımı için
     MetadataExtractor sınıfını kullanır.
     """
-    new_state = state.copy()
-    message = new_state.get("original_message", "").strip()
-    timestamp = new_state.get("timestamp")
+    message = state.get("original_message", "").strip()
+    timestamp = state.get("timestamp")
 
     # 1. Sorumluluğu delege et: Meta verileri extractor ile çıkar
     extractor = MetadataExtractor()
     metadata = extractor.extract(message, timestamp)
 
     # 2. State'i güncelle: Yapılandırılmış veriyi state'e ekle
-    new_state["processed_input"] = {
+    state["processed_input"] = {
         "cleaned_message": message,
         "meta": asdict(metadata)  # Dataclass'ı state uyumluluğu için dict'e çevir
     }
@@ -159,4 +158,4 @@ def process_input_node(state: Dict[str, Any]) -> Dict[str, Any]:
     log_summary = extractor.format_log_summary(metadata, message[:30])
     logger.info(log_summary)
 
-    return new_state
+    return state
