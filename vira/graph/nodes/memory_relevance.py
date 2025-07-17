@@ -258,7 +258,7 @@ def memory_relevance_node(state: ViraState) -> ViraState:
     )
 
     # Dinamik threshold hesapla
-    base_threshold = 0.45
+    base_threshold = 0.60
 
     # Kişiliğe göre threshold ayarla
     if "dynamic_personality" in new_state:

@@ -25,6 +25,18 @@ from vira.personality.intent.identity_probe import IdentityProbeIntentHandler
 from vira.personality.intent.creative_request import CreativeRequestIntentHandler
 from vira.personality.intent.unknown import UnknownIntentHandler
 
+# Yeni eklenen intent handler'ları import et
+from vira.personality.intent.planning import PlanningIntentHandler
+from vira.personality.intent.comparison import ComparisonIntentHandler
+from vira.personality.intent.translation import TranslationIntentHandler
+from vira.personality.intent.correction import CorrectionIntentHandler
+from vira.personality.intent.social import SocialIntentHandler
+from vira.personality.intent.complaint import ComplaintIntentHandler
+from vira.personality.intent.technical_help import TechnicalHelpIntentHandler
+from vira.personality.intent.learning import LearningIntentHandler
+
+
+
 # Niyet türlerini handler sınıflarına eşleyen sözlük
 INTENT_HANDLERS: Dict[str, Type[BaseIntentHandler]] = {
     IntentType.QUESTION: QuestionIntentHandler,
@@ -41,8 +53,15 @@ INTENT_HANDLERS: Dict[str, Type[BaseIntentHandler]] = {
     IntentType.IDENTITY_PROBE: IdentityProbeIntentHandler,
     IntentType.CREATIVE_REQUEST: CreativeRequestIntentHandler,
     IntentType.UNKNOWN: UnknownIntentHandler,
+    IntentType.PLANNING: PlanningIntentHandler,
+    IntentType.COMPARISON: ComparisonIntentHandler,
+    IntentType.TRANSLATION: TranslationIntentHandler,
+    IntentType.CORRECTION: CorrectionIntentHandler,
+    IntentType.SOCIAL: SocialIntentHandler,
+    IntentType.COMPLAINT: ComplaintIntentHandler,
+    IntentType.TECHNICAL_HELP: TechnicalHelpIntentHandler,
+    IntentType.LEARNING: LearningIntentHandler
 }
-
 
 class IntentHandlerFactory:
     """
