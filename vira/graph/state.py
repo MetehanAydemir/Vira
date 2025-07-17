@@ -47,6 +47,25 @@ class ViraState(TypedDict, total=False):
     interaction_id: Optional[str] = None
     short_memory_id: Optional[str] = None
     long_memory_id: Optional[str] = None
-
+    unified_user_model: Dict[str, Any] = None
     # Kişilik ile ilgili
     dynamic_personality: Optional[Dict[str, float]] = None
+
+    def has_unified_user_model(self):
+        """
+        State içinde birleşik kullanıcı modeli olup olmadığını kontrol eder.
+
+        Returns:
+            bool: Birleşik kullanıcı modeli varsa True, yoksa False
+        """
+        return "unified_user_model" in self
+
+    def get_unified_user_model(self):
+        """
+        State içindeki birleşik kullanıcı modelini döndürür.
+
+        Returns:
+            dict: Birleşik kullanıcı modeli
+            None: Model yoksa None döner
+        """
+        return self.get("unified_user_model", None)
