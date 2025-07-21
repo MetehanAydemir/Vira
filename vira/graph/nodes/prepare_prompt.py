@@ -6,7 +6,6 @@ from typing import Dict, Any, List
 from vira.graph.state import ViraState
 from vira.personality.intent.registry import IntentHandlerFactory
 from langchain_core.messages import SystemMessage, HumanMessage
-from vira.memory.reflector import compute_empathy_annotation  # Yeni import: empathy_node'dan
 
 def prepare_prompt_node(state: ViraState) -> ViraState:
     """

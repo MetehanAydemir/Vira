@@ -346,7 +346,7 @@ async def chat(request: ChatRequest):
             config = {"recursion_limit": 25}  # Prevent infinite loops
             final_state = app.invoke(initial_state, config=config)
 
-            logger.info(f"Final state: {final_state}")  # Eklenen debug satırı
+            #logger.info(f"Final state: {final_state}")  # Eklenen debug satırı
             logger.info(f"Response: {final_state.get('response', 'No response')}")
 
             return ChatResponse(
