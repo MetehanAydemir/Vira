@@ -16,14 +16,24 @@ from datetime import datetime, timedelta
 from passlib.context import CryptContext
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
+from apscheduler.schedulers.background import BackgroundScheduler
 
-from vira.graph.build import app
+# Reflection enhanced workflow için import
+from vira.graph.build import app as base_app
+from vira.graph.build_reflection import create_reflection_enhanced_workflow, schedule_actions
 from vira.db.engine import init_db, db_session, get_db_session
 from vira.db.repository import UserRepository, MemoryRepository
+from vira.db.reflection_repository import ReflectionRepository
 from vira.config import settings
 from vira.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# LangGraph akışını reflection-enhanced workflow ile değiştir
+app = create_reflection_enhanced_workflow()
+
+# Zamanlanmış görevler için scheduler
+scheduler = BackgroundScheduler()
 
 # FastAPI uygulaması
 api = FastAPI(
@@ -44,6 +54,7 @@ api.add_middleware(
 # Repository örnekleri
 user_repository = UserRepository()
 memory_repository = MemoryRepository()
+reflection_repository = None  # Başlatma sırasında oluşturulacak
 
 # Şifre doğrulama araçları
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -101,6 +112,43 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
+# Zamanlanmış görevleri başlat
+def start_scheduler():
+    """Zamanlanmış görevleri başlat"""
+    try:
+        # Yansıtma aksiyonlarını her 15 dakikada bir çalıştır
+        # APScheduler için parametresiz wrapper fonksiyon kullan
+        def scheduled_reflection_job():
+            """APScheduler için wrapper fonksiyon"""
+            try:
+                logger.info("Scheduled reflection job başlatılıyor...")
+                result = schedule_actions()
+                logger.info(f"Scheduled reflection job tamamlandı: {result}")
+            except Exception as e:
+                logger.error(f"Scheduled reflection job hatası: {str(e)}", exc_info=True)
+        
+        scheduler.add_job(
+            scheduled_reflection_job,
+            'interval',
+            minutes=15,
+            id='reflection_actions',
+            max_instances=1,  # Aynı anda sadece bir instance çalışsın
+            coalesce=True,    # Birden fazla job birikirse birleştir
+            misfire_grace_time=300  # 5 dakika grace time
+        )
+
+        # Scheduler'ı başlat
+        if not scheduler.running:
+            scheduler.start()
+            logger.info("Background scheduler başarıyla başlatıldı. Yansıtma aksiyonları 15 dakikada bir çalışacak.")
+        else:
+            logger.info("Background scheduler zaten çalışıyor.")
+            
+    except Exception as e:
+        logger.error(f"Scheduler başlatılırken hata oluştu: {str(e)}", exc_info=True)
+        # Scheduler hatası uygulamanın çalışmasını engellememelidir
+
+
 # Veritabanı başlatma
 @api.on_event("startup")
 async def startup_event():
@@ -112,10 +160,32 @@ async def startup_event():
         # Veritabanını başlat (tabloları oluştur)
         init_db(force_recreate=False)
 
-        logger.info("Veritabanı başarıyla başlatıldı")
+        # ReflectionRepository'yi başlat
+        global reflection_repository
+        reflection_repository = ReflectionRepository()
+
+        # Zamanlanmış görevleri başlat
+        start_scheduler()
+
+        logger.info("Veritabanı ve self-reflection sistemi başarıyla başlatıldı")
     except Exception as e:
         logger.error(f"Başlatma sırasında hata oluştu: {e}", exc_info=True)
         # Hatayı yut ve devam et, çünkü veritabanı zaten kurulu olabilir
+
+
+@api.on_event("shutdown")
+async def shutdown_event():
+    """API kapatıldığında çalışacak fonksiyon"""
+    try:
+        # Scheduler'ı güvenli bir şekilde durdur
+        if scheduler.running:
+            logger.info("Background scheduler durduruluyor...")
+            scheduler.shutdown(wait=True)  # Çalışan job'ların bitmesini bekle
+            logger.info("Background scheduler başarıyla durduruldu")
+        else:
+            logger.info("Background scheduler zaten durdurulmuş")
+    except Exception as e:
+        logger.error(f"Scheduler durdurulurken hata oluştu: {str(e)}", exc_info=True)
 
 
 def check_environment():
@@ -336,18 +406,26 @@ async def chat(request: ChatRequest):
             "messages": [],
             "response": "",
             "is_omega_command": False,
-            "dynamic_personality": {}
+            "dynamic_personality": {},
+            # Self-reflection için gerekli ek alanlar
+            "reflection_triggered": False,
+            "reflection_data": {},
+            "insights": []
         })
 
         logger.info(f"Chat request: {request.user_id}, Message: {request.message[:30]}...")
-        logger.info(f"Initial state: {initial_state}")  # Eklenen debug satırı
 
         try:
             config = {"recursion_limit": 25}  # Prevent infinite loops
+
+            # Enhanced workflow'u kullan
             final_state = app.invoke(initial_state, config=config)
 
-            #logger.info(f"Final state: {final_state}")  # Eklenen debug satırı
             logger.info(f"Response: {final_state.get('response', 'No response')}")
+
+            # Yansıtma tetiklenmiş mi kontrol et ve logla
+            if final_state.get("reflection_triggered", False):
+                logger.info(f"Self-reflection triggered during chat: {final_state.get('reflection_data', {})}")
 
             return ChatResponse(
                 response=final_state["response"],
@@ -366,10 +444,140 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=f"An error occurred during processing: {str(e)}")
 
 
+# Yeni endpoint: Self-reflection verilerini getir
+@api.get("/reflections/{user_id}")
+async def get_reflections(user_id: str):
+    """
+    Kullanıcının yansıtma verilerini getir
+    """
+    try:
+        # Kullanıcının var olup olmadığını kontrol et
+        user = user_repository.get_user_by_id(user_id)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Kullanıcı bulunamadı"
+            )
+
+        # ReflectionRepository kullanarak verileri getir
+        sessions = reflection_repository.get_reflection_sessions(user_id, limit=10)
+        insights = reflection_repository.get_insights(user_id, limit=10)
+        goals = reflection_repository.get_active_goals(user_id)
+
+        # Sonuçları formatlayıp döndür
+        return {
+            "sessions": sessions,
+            "insights": insights,
+            "goals": goals,
+            "metadata": {
+                "user_id": user_id,
+                "last_updated": datetime.utcnow().isoformat()
+            }
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Yansıtma verileri alınırken hata: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Yansıtma verileri alınırken bir hata oluştu"
+        )
+
+
+# Self-reflection tetikleme endpoint'i
+@api.post("/reflections/{user_id}/trigger")
+async def trigger_reflection(user_id: str, background_tasks: BackgroundTasks):
+    """
+    Kullanıcı için manuel yansıtma oturumu tetikle
+    """
+    try:
+        # Kullanıcının var olup olmadığını kontrol et
+        user = user_repository.get_user_by_id(user_id)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Kullanıcı bulunamadı"
+            )
+
+        # ReflectionRepository kullanarak manuel yansıtma başlat
+        session_id = reflection_repository.create_reflection_session(
+            user_id=user_id,
+            reflection_type="manual",
+            trigger_reasons=["user_triggered"]
+        )
+
+        if not session_id:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Yansıtma oturumu oluşturulamadı"
+            )
+
+        # Yansıtma işlemini arka planda başlat
+        background_tasks.add_task(
+            schedule_actions,
+            user_id=user_id,
+            force=True,
+            reflection_type="manually_triggered"
+        )
+
+        return {
+            "status": "success",
+            "message": "Yansıtma oturumu başlatıldı",
+            "session_id": session_id,
+            "triggered_at": datetime.utcnow().isoformat()
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Yansıtma tetiklenirken hata: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Yansıtma tetiklenirken bir hata oluştu"
+        )
+
+
 @api.get("/health")
 async def health_check():
     """Sağlık kontrolü endpoint'i"""
-    return {"status": "healthy", "version": "1.0.0"}
+    try:
+        # Scheduler durumunu detaylı kontrol et
+        scheduler_info = {
+            "running": scheduler.running,
+            "jobs_count": len(scheduler.get_jobs()),
+            "next_run_time": None
+        }
+        
+        # Reflection job'ının bir sonraki çalışma zamanını al
+        reflection_job = scheduler.get_job('reflection_actions')
+        if reflection_job:
+            scheduler_info["next_run_time"] = reflection_job.next_run_time.isoformat() if reflection_job.next_run_time else None
+            scheduler_info["reflection_job_active"] = True
+        else:
+            scheduler_info["reflection_job_active"] = False
+            
+        return {
+            "status": "healthy",
+            "version": "1.0.0",
+            "timestamp": datetime.utcnow().isoformat(),
+            "features": {
+                "self_reflection_enabled": True,
+                "scheduler": scheduler_info
+            }
+        }
+    except Exception as e:
+        logger.error(f"Health check error: {str(e)}", exc_info=True)
+        return {
+            "status": "degraded",
+            "version": "1.0.0",
+            "timestamp": datetime.utcnow().isoformat(),
+            "error": str(e),
+            "features": {
+                "self_reflection_enabled": False,
+                "scheduler": {"running": False, "error": str(e)}
+            }
+        }
 
 
 # API'yi doğrudan çalıştırma

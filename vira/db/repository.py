@@ -76,6 +76,51 @@ class UserRepository:
 
             return user_data
 
+    def get_active_users(self, days: int = 7) -> List[Dict[str, Any]]:
+        """
+        Son X günde aktif olan kullanıcıları getirir.
+        
+        Args:
+            days: Kaç günlük aktivite kontrolü yapılacağı (varsayılan: 7)
+            
+        Returns:
+            List[Dict[str, Any]]: Aktif kullanıcıların listesi
+        """
+        try:
+            from datetime import datetime, timedelta
+            
+            # Son X günün tarihini hesapla
+            cutoff_date = datetime.now() - timedelta(days=days)
+            
+            with db_session() as session:
+                # Son X günde Interaction tablosunda kayıt olan kullanıcıları getir
+                # Unique user_id'leri döndür
+                active_user_ids = session.query(Interaction.user_id).filter(
+                    Interaction.created_at >= cutoff_date
+                ).distinct().all()
+                
+                # User_id'leri listeden çıkar
+                user_ids = [user_id[0] for user_id in active_user_ids]
+                
+                # Kullanıcı bilgilerini getir
+                users = session.query(User).filter(User.id.in_(user_ids)).all()
+                
+                result = []
+                for user in users:
+                    result.append({
+                        "id": str(user.id),
+                        "username": user.username,
+                        "email": user.email,
+                        "created_at": user.created_at
+                    })
+                
+                logger.info(f"Retrieved {len(result)} active users for last {days} days")
+                return result
+                
+        except Exception as e:
+            logger.error(f"Failed to retrieve active users: {e}")
+            return []
+
 class MemoryRepository:
     """Repository for memory operations using SQLAlchemy."""
 
@@ -376,6 +421,80 @@ class MemoryRepository:
         except Exception as e:
             logger.error(f"Failed to retrieve similar memories with metadata: {e}")
             return []
+
+    def get_user_memories(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Kullanıcının hafıza kayıtlarını getirir (hem kısa hem uzun süreli).
+        
+        Args:
+            user_id: Kullanıcı kimliği
+            limit: Getirilecek maksimum kayıt sayısı (varsayılan: 50)
+            
+        Returns:
+            List[Dict[str, Any]]: Hafıza kayıtlarının listesi
+        """
+        try:
+            with db_session() as session:
+                memories = []
+                
+                # Uzun süreli hafıza kayıtlarını getir
+                long_term_memories = session.scalars(
+                    select(LongTermMemory)
+                    .filter(LongTermMemory.metadatas['user_id'].astext == user_id)
+                    .order_by(desc(LongTermMemory.created_at))
+                    .limit(limit // 2)  # Toplam limitin yarısı kadar
+                ).all()
+                
+                for memory in long_term_memories:
+                    memories.append({
+                        "id": str(memory.id),
+                        "content": memory.content,
+                        "type": "long_term",
+                        "created_at": memory.created_at,
+                        "metadata": memory.metadatas,
+                        "importance_score": memory.importance_score
+                    })
+                
+                # Kısa süreli hafıza kayıtlarını getir
+                # Kullanıcının son etkileşimlerinden session_id'leri al
+                recent_interactions = session.scalars(
+                    select(Interaction.id)
+                    .filter(Interaction.user_id == user_id)
+                    .order_by(desc(Interaction.created_at))
+                    .limit(10)  # Son 10 etkileşim
+                ).all()
+                
+                if recent_interactions:
+                    # Son etkileşimlere ait session_id'leri bul (basit yaklaşım)
+                    # Gerçek uygulamada session_id mapping'i daha karmaşık olabilir
+                    short_term_memories = session.scalars(
+                        select(ShortTermMemory)
+                        .order_by(desc(ShortTermMemory.created_at))
+                        .limit(limit // 2)  # Toplam limitin yarısı kadar
+                    ).all()
+                    
+                    for memory in short_term_memories:
+                        memories.append({
+                            "id": memory.id,
+                            "content": memory.content,
+                            "type": "short_term",
+                            "created_at": memory.created_at,
+                            "session_id": memory.session_id
+                        })
+                
+                # Tarih sırasına göre sırala (en yeni önce)
+                memories.sort(key=lambda x: x["created_at"], reverse=True)
+                
+                # Limit kadar kayıt döndür
+                result = memories[:limit]
+                
+                logger.info(f"Retrieved {len(result)} memories for user {user_id}")
+                return result
+                
+        except Exception as e:
+            logger.error(f"Failed to retrieve user memories: {e}")
+            return []
+
 class PersonalityRepository:
     """Kişilik vektörlerini yönetmek için SQLAlchemy repository sınıfı."""
 
