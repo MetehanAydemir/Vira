@@ -149,7 +149,7 @@ def generate_response_node(state: ViraState) -> ViraState:
         response = call_chat_model(
             messages=messages,
             model="o4-mini",  # Model adı env değişkeninden de alınabilir
-            temperature=0.7,
+            temperature=0.5,
             max_tokens=5000
         )
         call_duration = time.time() - start_time

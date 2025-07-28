@@ -113,7 +113,7 @@ Analizini yaptıktan sonra, kararını SADECE aşağıdaki formatta ver. Başka 
 
         response = call_chat_model(
             messages=messages,
-            model="gpt-4o-mini",
+            model=settings.CUSTOM_CHAT_MODEL_NAME or "openai/gpt-4o-mini",
             temperature=0.1,
             max_tokens=50
         )

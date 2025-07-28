@@ -2,6 +2,7 @@ from typing import Dict, Any, List, Tuple
 from vira.db.repository import PersonalityRepository
 from vira.utils.llm_client import call_chat_model
 from vira.utils.logger import get_logger
+from vira.config import settings
 import json
 logger = get_logger(__name__)
 
@@ -59,7 +60,7 @@ class PersonalityRefinementPipeline:
             # LLM'den değerlendirme al
             result = call_chat_model(
                 messages=messages,
-                model="gpt-4o-mini",  # Yüksek kaliteli değerlendirme için GPT-4
+                model=settings.CUSTOM_CHAT_MODEL_NAME or "openai/gpt-4o-mini",  # OpenRouter model kullan
                 temperature=0.3,  # Tutarlı sonuçlar için düşük sıcaklık
                 max_tokens=150,
                 response_format={"type": "json_object"}  # JSON formatında yanıt al

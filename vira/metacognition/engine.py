@@ -187,27 +187,324 @@ class MetaCognitiveEngine:
             if key in model.personality_trends:
                 model.personality_trends[key]["current"] = value
 
-    # Yardımcı analiz metodları - gerçek uygulamada NLP, ML gibi teknolojilerle geliştirilmeli
+    # Yardımcı analiz metodları - gerçek NLP implementasyonu
     def _extract_emotional_state(self, conversations):
-        return {"primary": "neutral", "intensity": 0.5}
+        """Konuşmalardan duygusal durumu çıkarır."""
+        if not conversations:
+            return {"primary": "neutral", "intensity": 0.5}
+        
+        try:
+            from vira.utils.llm_client import call_chat_model
+            
+            # Son birkaç konuşmayı analiz et
+            recent_messages = []
+            for conv in conversations[-5:]:  # Son 5 konuşma
+                if isinstance(conv, dict):
+                    content = conv.get("content", conv.get("message", ""))
+                    if content:
+                        recent_messages.append(content)
+            
+            if not recent_messages:
+                return {"primary": "neutral", "intensity": 0.5}
+            
+            combined_text = " ".join(recent_messages)
+            
+            messages = [
+                {
+                    "role": "system",
+                    "content": """Sen bir duygusal analiz uzmanısın. Verilen metinlerdeki duygusal durumu analiz et.
+
+Yanıtını JSON formatında ver:
+{
+    "primary": "positive/negative/neutral/excited/anxious/frustrated/happy/sad/angry/curious",
+    "intensity": 0.0-1.0 arası sayı (0=çok hafif, 1=çok yoğun)
+}"""
+                },
+                {
+                    "role": "user",
+                    "content": f"Bu konuşmalardaki duygusal durumu analiz et:\n\n{combined_text[:1000]}"
+                }
+            ]
+            
+            response = call_chat_model(
+                messages,
+                temperature=0.3,
+                max_tokens=150,
+                response_format={"type": "json_object"}
+            )
+            
+            import json
+            result = self._parse_emotional_state_with_fallback(response)
+            return result
+            
+        except Exception as e:
+            logger.error(f"Duygusal durum analizi hatası: {str(e)}")
+            return {"primary": "neutral", "intensity": 0.5}
 
     def _extract_topic_focus(self, conversations):
-        return []
+        """Konuşmalardan odaklanılan konuları çıkarır."""
+        if not conversations:
+            return []
+        
+        try:
+            from vira.utils.llm_client import call_chat_model
+            
+            # Konuşma içeriklerini topla
+            all_content = []
+            for conv in conversations[-10:]:  # Son 10 konuşma
+                if isinstance(conv, dict):
+                    content = conv.get("content", conv.get("message", ""))
+                    if content:
+                        all_content.append(content)
+            
+            if not all_content:
+                return []
+            
+            combined_text = " ".join(all_content)
+            
+            messages = [
+                {
+                    "role": "system",
+                    "content": """Sen bir metin analisti ve konu çıkarma uzmanısın. Verilen konuşmalardan ana konuları çıkar.
+
+Konular kısa ve öz olmalı (1-3 kelime). En fazla 5 konu çıkar.
+Her konuyu ayrı satırda ver, numaralandırma kullanma.
+Türkçe konu isimleri kullan."""
+                },
+                {
+                    "role": "user",
+                    "content": f"Bu konuşmalardan ana konuları çıkar:\n\n{combined_text[:1500]}"
+                }
+            ]
+            
+            response = call_chat_model(messages, temperature=0.5, max_tokens=200)
+            
+            # Yanıtı temizle ve konuları çıkar
+            topics = []
+            for line in response.strip().split('\n'):
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    # Numaralandırma ve işaretleri temizle
+                    import re
+                    line = re.sub(r'^\d+[\.\)]\s*', '', line)
+                    line = re.sub(r'^[-\*]\s*', '', line)
+                    topic = line.strip()
+                    if topic and len(topic) > 2:
+                        topics.append(topic)
+            
+            return topics[:5]  # En fazla 5 konu
+            
+        except Exception as e:
+            logger.error(f"Konu analizi hatası: {str(e)}")
+            return []
 
     def _extract_interaction_mode(self, conversations):
-        return "casual"
+        """Konuşmalardan etkileşim modunu çıkarır."""
+        if not conversations:
+            return "casual"
+        
+        try:
+            from vira.utils.llm_client import call_chat_model
+            
+            # Son birkaç konuşmayı analiz et
+            recent_messages = []
+            for conv in conversations[-5:]:
+                if isinstance(conv, dict):
+                    content = conv.get("content", conv.get("message", ""))
+                    if content:
+                        recent_messages.append(content)
+            
+            if not recent_messages:
+                return "casual"
+            
+            combined_text = " ".join(recent_messages)
+            
+            messages = [
+                {
+                    "role": "system",
+                    "content": """Sen bir iletişim analisti uzmanısın. Verilen konuşmalardaki etkileşim modunu belirle.
+
+Etkileşim modları:
+- formal: Resmi, profesyonel ton
+- casual: Günlük, rahat konuşma
+- technical: Teknik, detaylı açıklamalar
+- emotional: Duygusal, kişisel paylaşımlar
+- help_seeking: Yardım arama, problem çözme
+- exploratory: Keşfetme, öğrenme odaklı
+
+Sadece mod ismini ver, açıklama yapma."""
+                },
+                {
+                    "role": "user",
+                    "content": f"Bu konuşmalardaki etkileşim modunu belirle:\n\n{combined_text[:1000]}"
+                }
+            ]
+            
+            response = call_chat_model(messages, temperature=0.3, max_tokens=50)
+            
+            # Yanıtı temizle
+            mode = response.strip().lower()
+            valid_modes = ["formal", "casual", "technical", "emotional", "help_seeking", "exploratory"]
+            
+            for valid_mode in valid_modes:
+                if valid_mode in mode:
+                    return valid_mode
+            
+            return "casual"  # Varsayılan
+            
+        except Exception as e:
+            logger.error(f"Etkileşim modu analizi hatası: {str(e)}")
+            return "casual"
 
     def _extract_recent_context(self, conversations):
-        return {}
+        """Son konuşmalardan bağlamsal bilgileri çıkarır."""
+        if not conversations:
+            return {}
+        
+        try:
+            # Son konuşmadan temel bilgileri çıkar
+            last_conv = conversations[-1] if conversations else {}
+            
+            context = {
+                "last_interaction_time": last_conv.get("timestamp", ""),
+                "conversation_count": len(conversations),
+                "recent_topics": self._extract_topic_focus(conversations[-3:]),  # Son 3 konuşma
+                "session_active": len(conversations) > 0
+            }
+            
+            # Zaman analizi
+            if len(conversations) >= 2:
+                try:
+                    from datetime import datetime
+                    last_time = last_conv.get("timestamp", "")
+                    if last_time:
+                        # Basit zaman analizi
+                        context["time_since_last"] = "recent"
+                except:
+                    pass
+            
+            return context
+            
+        except Exception as e:
+            logger.error(f"Bağlam analizi hatası: {str(e)}")
+            return {}
 
     def _extract_preferred_topics(self, conversations):
-        return []
+        """Konuşmalardan tercih edilen konuları çıkarır."""
+        if not conversations:
+            return []
+        
+        try:
+            # Tüm konuşmalardan konuları çıkar ve frekanslarını hesapla
+            all_topics = []
+            
+            # Konuşmaları gruplara böl (her 5 konuşma bir grup)
+            for i in range(0, len(conversations), 5):
+                group = conversations[i:i+5]
+                topics = self._extract_topic_focus(group)
+                all_topics.extend(topics)
+            
+            if not all_topics:
+                return []
+            
+            # Konu frekanslarını hesapla
+            topic_counts = {}
+            for topic in all_topics:
+                topic_lower = topic.lower()
+                topic_counts[topic_lower] = topic_counts.get(topic_lower, 0) + 1
+            
+            # En sık geçen konuları sırala
+            sorted_topics = sorted(topic_counts.items(), key=lambda x: x[1], reverse=True)
+            
+            # En fazla 5 tercih edilen konu döndür
+            preferred = [topic for topic, count in sorted_topics[:5] if count > 1]
+            
+            return preferred
+            
+        except Exception as e:
+            logger.error(f"Tercih edilen konular analizi hatası: {str(e)}")
+            return []
 
     def _calculate_question_frequency(self, conversations):
-        return 0.0
+        """Konuşmalardaki soru sıklığını hesaplar."""
+        if not conversations:
+            return 0.0
+        
+        try:
+            question_count = 0
+            total_messages = 0
+            
+            for conv in conversations:
+                if isinstance(conv, dict):
+                    content = conv.get("content", conv.get("message", ""))
+                    if content:
+                        total_messages += 1
+                        # Soru işaretlerini say
+                        question_count += content.count("?")
+                        # Soru kelimelerini say
+                        question_words = ["nasıl", "neden", "ne", "kim", "nerede", "ne zaman", "hangi"]
+                        content_lower = content.lower()
+                        for word in question_words:
+                            if word in content_lower:
+                                question_count += 0.5  # Kısmi puan
+            
+            if total_messages == 0:
+                return 0.0
+            
+            return min(question_count / total_messages, 2.0)  # Maksimum 2.0
+            
+        except Exception as e:
+            logger.error(f"Soru sıklığı hesaplama hatası: {str(e)}")
+            return 0.0
 
     def _calculate_typical_session_length(self, conversations):
-        return 0
+        """Tipik oturum uzunluğunu hesaplar."""
+        if not conversations:
+            return 0
+        
+        try:
+            # Basit bir hesaplama: toplam konuşma sayısını oturum sayısına böl
+            # Gerçek implementasyonda zaman damgalarına göre oturumlar ayrılabilir
+            
+            total_conversations = len(conversations)
+            
+            # Zaman damgalarına göre oturum analizi yapmaya çalış
+            sessions = []
+            current_session = []
+            
+            for i, conv in enumerate(conversations):
+                if isinstance(conv, dict):
+                    timestamp = conv.get("timestamp", "")
+                    
+                    if current_session and timestamp:
+                        # Basit oturum ayrımı: 1 saatten fazla ara varsa yeni oturum
+                        try:
+                            from datetime import datetime, timedelta
+                            # Bu basit bir implementasyon, gerçekte daha karmaşık olabilir
+                            current_session.append(conv)
+                        except:
+                            current_session.append(conv)
+                    else:
+                        current_session.append(conv)
+                    
+                    # Her 10 konuşmada bir oturum bitir (basit yaklaşım)
+                    if len(current_session) >= 10:
+                        sessions.append(len(current_session))
+                        current_session = []
+            
+            # Son oturumu da ekle
+            if current_session:
+                sessions.append(len(current_session))
+            
+            if not sessions:
+                return total_conversations
+            
+            # Ortalama oturum uzunluğu
+            return sum(sessions) // len(sessions)
+            
+        except Exception as e:
+            logger.error(f"Oturum uzunluğu hesaplama hatası: {str(e)}")
+            return len(conversations) if conversations else 0
 
     # Vira'ya özgü zenginleştirme fonksiyonları
     def enhance_memory_retrieval(self, query: str, model: UserMentalModel,
@@ -295,6 +592,117 @@ class MetaCognitiveEngine:
             weighted_memories.append(memory)
 
         return weighted_memories
+
+    def _parse_emotional_state_with_fallback(self, response):
+        """
+        Robust parsing function for emotional state with multiple fallback strategies.
+        """
+        import json
+        import re
+        
+        if not response or not response.strip():
+            return {"primary": "neutral", "intensity": 0.5}
+        
+        # Strategy 1: Try direct JSON parsing
+        try:
+            result = json.loads(response)
+            if "primary" in result and "intensity" in result:
+                return {
+                    "primary": result["primary"],
+                    "intensity": max(0.0, min(1.0, float(result["intensity"])))
+                }
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass
+        
+        # Strategy 2: Extract JSON from text
+        extracted_json = self._extract_json_from_text(response)
+        if extracted_json:
+            try:
+                result = json.loads(extracted_json)
+                if "primary" in result and "intensity" in result:
+                    return {
+                        "primary": result["primary"],
+                        "intensity": max(0.0, min(1.0, float(result["intensity"])))
+                    }
+            except (json.JSONDecodeError, ValueError, TypeError):
+                pass
+        
+        # Strategy 3: Pattern matching for key-value pairs
+        # Look for primary emotion
+        primary_match = re.search(r'primary["\']?\s*:\s*["\']?(\w+)["\']?', response, re.IGNORECASE)
+        primary = primary_match.group(1) if primary_match else "neutral"
+        
+        # Look for intensity
+        intensity_match = re.search(r'intensity["\']?\s*:\s*["\']?([0-9.]+)["\']?', response, re.IGNORECASE)
+        intensity = float(intensity_match.group(1)) if intensity_match else 0.5
+        
+        if primary_match or intensity_match:
+            return {
+                "primary": primary.lower(),
+                "intensity": max(0.0, min(1.0, intensity))
+            }
+        
+        # Strategy 4: Natural language parsing
+        emotion_keywords = {
+            "happy": ["happy", "joy", "pleased", "content", "cheerful"],
+            "sad": ["sad", "depressed", "down", "melancholy"],
+            "angry": ["angry", "mad", "furious", "irritated"],
+            "excited": ["excited", "enthusiastic", "thrilled"],
+            "anxious": ["anxious", "worried", "nervous", "concerned"],
+            "frustrated": ["frustrated", "annoyed", "bothered"],
+            "curious": ["curious", "interested", "wondering"],
+            "positive": ["positive", "good", "great", "excellent"],
+            "negative": ["negative", "bad", "poor", "terrible"]
+        }
+        
+        response_lower = response.lower()
+        for emotion, keywords in emotion_keywords.items():
+            if any(keyword in response_lower for keyword in keywords):
+                # Try to extract intensity from numbers in the text
+                numbers = re.findall(r'[0-9.]+', response)
+                intensity = 0.5
+                if numbers:
+                    try:
+                        intensity = max(0.0, min(1.0, float(numbers[0])))
+                    except:
+                        pass
+                
+                return {"primary": emotion, "intensity": intensity}
+        
+        # Strategy 5: Default fallback
+        return {"primary": "neutral", "intensity": 0.5}
+
+    def _extract_json_from_text(self, text):
+        """Extract JSON object from text that might contain other content."""
+        import json
+        import re
+        
+        # Try to find JSON object in the text
+        json_pattern = r'\{[^{}]*\}'
+        matches = re.findall(json_pattern, text)
+        
+        if matches:
+            # Return the first match that looks like JSON
+            for match in matches:
+                try:
+                    json.loads(match)  # Test if it's valid JSON
+                    return match
+                except:
+                    continue
+        
+        # Try to find content between curly braces (more flexible)
+        start = text.find('{')
+        end = text.rfind('}')
+        
+        if start != -1 and end != -1 and end > start:
+            potential_json = text[start:end+1]
+            try:
+                json.loads(potential_json)
+                return potential_json
+            except:
+                pass
+        
+        return None
 
     def _weight_memories_by_context(self, memories, current_state):
         """Mevcut bağlama göre hafızaları ağırlıklandırır."""
