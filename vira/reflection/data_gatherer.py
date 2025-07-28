@@ -8,44 +8,38 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 import uuid
 
-from ..db.repository import DatabaseRepository
-from ..utils.llm_client import LLMClient
+from ..db.repository import MemoryRepository
 
 class ReflectionDataGatherer:
     """Yansıtma için veri toplama - mevcut veritabanından"""
     
-    def __init__(self, db_repository: Optional[DatabaseRepository] = None, llm_client: Optional[LLMClient] = None):
-        """Initialize with optional database repository and LLM client."""
-        self.db = db_repository or DatabaseRepository()
-        self.llm = llm_client or LLMClient()
+    def __init__(self, db_repository: Optional[MemoryRepository] = None):
+        """Initialize with optional database repository."""
+        self.db = db_repository or MemoryRepository()
     
     def gather_conversation_patterns(self, user_id: str, days_back: int = 30) -> Dict[str, Any]:
         """Konuşma desenlerini topla"""
         try:
-            # Mevcut DatabaseRepository metodunu kullan
-            conversations = self.db.get_user_interactions(uuid.UUID(user_id), limit=100)
+            # MemoryRepository'nin get_conversation_history metodunu kullan
+            conversations = self.db.get_conversation_history(user_id, limit=100, days=days_back)
 
-            # Tarih filtreleme
-            cutoff_date = datetime.now() - timedelta(days=days_back)
-            conversations = [c for c in conversations if c.get('created_at', datetime.now()) >= cutoff_date]
-
-            # Duygusal ton analizi yap
-            for conv in conversations:
-                if 'message' in conv and conv['message']:
-                    # LLMClient'ın analyze_sentiment metodunu kullan
-                    sentiment = self.llm.analyze_sentiment(conv['message'])
-                    conv['emotional_tone'] = sentiment.get('sentiment', 'neutral')
-                    conv['emotional_intensity'] = sentiment.get('intensity', 0.5)
-                else:
-                    conv['emotional_tone'] = 'neutral'
-                    conv['emotional_intensity'] = 0.5
+            # Konuşmaları dict formatına çevir
+            conversation_dicts = []
+            for user_msg, system_resp, created_at in conversations:
+                conversation_dicts.append({
+                    'message': user_msg,
+                    'response': system_resp,
+                    'created_at': created_at,
+                    'emotional_tone': 'neutral',  # Basit varsayılan
+                    'emotional_intensity': 0.5
+                })
             
             return {
-                "total_conversations": len(conversations),
-                "conversation_frequency": self._calculate_frequency(conversations),
-                "topic_distribution": self._analyze_topics(conversations),
-                "emotional_journey": self._build_emotional_timeline(conversations),
-                "response_patterns": self._analyze_response_patterns(conversations)
+                "total_conversations": len(conversation_dicts),
+                "conversation_frequency": self._calculate_frequency(conversation_dicts),
+                "topic_distribution": self._analyze_topics(conversation_dicts),
+                "emotional_journey": self._build_emotional_timeline(conversation_dicts),
+                "response_patterns": self._analyze_response_patterns(conversation_dicts)
             }
         except Exception as e:
             # Hata durumunda boş sonuç döndür
@@ -57,20 +51,21 @@ class ReflectionDataGatherer:
     def gather_memory_patterns(self, user_id: str, min_importance: float = 0.6) -> Dict[str, Any]:
         """Hafıza desenlerini topla"""
         try:
-            # Filtreleme için metadata hazırla
-            metadata_filter = {"user_id": str(user_id)}
+            # MemoryRepository'nin get_long_term_memories metodunu kullan
+            memories = self.db.get_long_term_memories(user_id)
 
-            # Mevcut DatabaseRepository metodunu kullan
-            memories = self.db.filter_long_term_memory(metadata_filter, limit=50)
-
-            # Önem skoru filtreleme
-            memories = [m for m in memories if m.get('importance_score', 0.5) >= min_importance]
+            # Önem skoru filtreleme (eğer varsa)
+            filtered_memories = []
+            for memory in memories:
+                importance = memory.get('metadata', {}).get('importance_score', 0.5)
+                if importance >= min_importance:
+                    filtered_memories.append(memory)
             
             return {
-                "important_memories": memories,
-                "memory_themes": self._extract_memory_themes(memories),
-                "temporal_distribution": self._analyze_memory_timeline(memories),
-                "emotional_memories": self._categorize_emotional_memories(memories)
+                "important_memories": filtered_memories,
+                "memory_themes": self._extract_memory_themes(filtered_memories),
+                "temporal_distribution": self._analyze_memory_timeline(filtered_memories),
+                "emotional_memories": self._categorize_emotional_memories(filtered_memories)
             }
         except Exception as e:
             return {
@@ -172,7 +167,9 @@ class ReflectionDataGatherer:
         """
 
         try:
-            response = self.llm.generate(prompt)
+            from vira.utils.llm_client import call_chat_model
+            messages = [{"role": "user", "content": prompt}]
+            response = call_chat_model(messages, temperature=0.5, max_tokens=200)
             themes = [theme.strip() for theme in response.split(",")]
             return {"themes": themes[:5]}  # En fazla 5 tema döndür
         except Exception:
@@ -210,12 +207,12 @@ class ReflectionDataGatherer:
         for memory in memories:
             content = memory.get('content', '')
             if content:
-                # LLM'in analyze_sentiment metodunu kullan
-                sentiment = self.llm.analyze_sentiment(content)
-                emotions = sentiment.get('emotions', ['neutral'])
-
-                # İlk duyguyu ana duygu olarak al
-                primary_emotion = emotions[0] if emotions else 'neutral'
+                # Basit duygusal analiz (gerçek uygulamada LLM kullanılabilir)
+                primary_emotion = 'neutral'
+                if any(word in content.lower() for word in ['mutlu', 'sevinç', 'başarı']):
+                    primary_emotion = 'positive'
+                elif any(word in content.lower() for word in ['üzgün', 'kızgın', 'problem']):
+                    primary_emotion = 'negative'
 
                 # Duygulara göre grupla
                 if primary_emotion not in emotional_categories:

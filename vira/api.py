@@ -26,6 +26,7 @@ from vira.db.repository import UserRepository, MemoryRepository
 from vira.db.reflection_repository import ReflectionRepository
 from vira.config import settings
 from vira.utils.logger import get_logger
+from vira.services.message_service import get_message_service
 
 logger = get_logger(__name__)
 
@@ -55,6 +56,9 @@ api.add_middleware(
 user_repository = UserRepository()
 memory_repository = MemoryRepository()
 reflection_repository = None  # Başlatma sırasında oluşturulacak
+
+# MessageService örneği
+message_service = None  # Başlatma sırasında oluşturulacak
 
 # Şifre doğrulama araçları
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -161,13 +165,17 @@ async def startup_event():
         init_db(force_recreate=False)
 
         # ReflectionRepository'yi başlat
-        global reflection_repository
+        global reflection_repository, message_service
         reflection_repository = ReflectionRepository()
+
+        # MessageService'i başlat
+        message_service = get_message_service()
+        logger.info("MessageService başarıyla başlatıldı")
 
         # Zamanlanmış görevleri başlat
         start_scheduler()
 
-        logger.info("Veritabanı ve self-reflection sistemi başarıyla başlatıldı")
+        logger.info("Veritabanı, MessageService ve self-reflection sistemi başarıyla başlatıldı")
     except Exception as e:
         logger.error(f"Başlatma sırasında hata oluştu: {e}", exc_info=True)
         # Hatayı yut ve devam et, çünkü veritabanı zaten kurulu olabilir
@@ -177,6 +185,13 @@ async def startup_event():
 async def shutdown_event():
     """API kapatıldığında çalışacak fonksiyon"""
     try:
+        # MessageService'i güvenli bir şekilde durdur
+        global message_service
+        if message_service and message_service.running:
+            logger.info("MessageService durduruluyor...")
+            message_service.stop()
+            logger.info("MessageService başarıyla durduruldu")
+
         # Scheduler'ı güvenli bir şekilde durdur
         if scheduler.running:
             logger.info("Background scheduler durduruluyor...")
@@ -185,7 +200,7 @@ async def shutdown_event():
         else:
             logger.info("Background scheduler zaten durdurulmuş")
     except Exception as e:
-        logger.error(f"Scheduler durdurulurken hata oluştu: {str(e)}", exc_info=True)
+        logger.error(f"Shutdown sırasında hata oluştu: {str(e)}", exc_info=True)
 
 
 def check_environment():

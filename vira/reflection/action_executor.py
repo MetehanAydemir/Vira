@@ -9,16 +9,13 @@ import uuid
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 
-from ..db.repository import DatabaseRepository
-from ..utils.message_service import MessageService
-
+from ..db.repository import MemoryRepository
 class ActionExecutor:
     """Belirlenen aksiyonları uygulama"""
     
-    def __init__(self, db_repository: Optional[DatabaseRepository] = None, message_service: Optional[MessageService] = None):
-        """Initialize with database repository and message service"""
-        self.db = db_repository or DatabaseRepository()
-        self.message_service = message_service or MessageService()
+    def __init__(self, db_repository: Optional[MemoryRepository] = None):
+        """Initialize with database repository"""
+        self.db = db_repository or MemoryRepository()
 
     def execute_action(self, goal_id: str) -> Dict[str, Any]:
         """

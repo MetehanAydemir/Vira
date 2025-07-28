@@ -9,7 +9,9 @@ from typing import Dict, Any, List, Optional, TypedDict
 from datetime import datetime, timedelta
 import uuid
 
-from ..db.repository import DatabaseRepository
+from ..db.repository import MemoryRepository
+from ..db.database_repository import DatabaseRepository
+from ..utils.database_llm_client import LLMClient
 from ..graph.state import ViraState
 from ..utils.logger import get_logger
 
@@ -18,9 +20,6 @@ from .pattern_analyzers import TemporalPatternAnalyzer, BehavioralPatternAnalyze
 from .insight_generator import InsightGenerator
 from .goal_generator import EmergentGoalGenerator
 from .action_executor import ActionExecutor
-
-# LLM istemcisini import et
-from ..utils.llm_client import LLMClient
 
 # Logger ayarla
 logger = get_logger(__name__)
@@ -308,7 +307,7 @@ def calculate_execution_time(goal: Dict[str, Any]) -> datetime:
 
 def save_reflection_session(
     user_id: str,
-    db_repository: DatabaseRepository,
+    db_repository: MemoryRepository,
     reflection_data: Dict[str, Any],
     duration_seconds: float = 0
 ) -> str:

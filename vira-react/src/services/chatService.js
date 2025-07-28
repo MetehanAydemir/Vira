@@ -49,7 +49,7 @@ export const streamMessage = async (userId, message, onToken) => {
 
 export const resetConversation = async (userId) => {
   try {
-    const response = await api.post('/reset', { user_id: userId });
+    const response = await api.post(`/conversations/${userId}/reset`);
     return response.data;
   } catch (error) {
     console.error('Oturum sıfırlama hatası:', error);

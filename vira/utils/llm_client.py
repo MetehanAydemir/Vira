@@ -3,6 +3,7 @@ import os
 from typing import List, Dict, Any, Optional
 import backoff
 from vira.services.custom_chat import CustomChatService
+from vira.config import settings
 from vira.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -17,7 +18,7 @@ MAX_RETRIES = 3
 )
 def call_chat_model(
     messages: List,
-    model: str = "gpt-4o",
+    model: str = None,
     temperature: float = 0.7,
     max_tokens: int = 800,
     response_format: Optional[Dict[str, str]] = None
@@ -35,6 +36,10 @@ def call_chat_model(
     Returns:
         LLM'den alınan yanıt metni
     """
+    # Model seçimi: Custom chat model'i öncelikle kullan (OpenRouter için)
+    if model is None:
+        model = settings.CUSTOM_CHAT_MODEL_NAME or settings.AZURE_OPENAI_DEPLOYMENT_NAME or "openai/gpt-4o-mini"
+    
     logger.info(f"LLM çağrısı yapılıyor. Model: {model}, Temperature: {temperature}")
     
     # Mock mod kontrolü - test ortamında gerçek API çağrısı yapmadan çalışabilmek için
@@ -90,4 +95,25 @@ def call_chat_model(
         return response
     except Exception as e:
         logger.error(f"LLM çağrısı sırasında hata: {str(e)}")
+        
+        # Fallback mekanizması: Farklı model ile tekrar dene
+        if model != "gpt-3.5-turbo":
+            logger.warning(f"Model {model} ile hata oluştu, fallback olarak gpt-3.5-turbo deneniyor...")
+            try:
+                fallback_response = chat_service.generate_chat_response(
+                    messages=formatted_messages,
+                    model="gpt-3.5-turbo",
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    response_format=response_format
+                )
+                logger.info("Fallback model ile başarılı yanıt alındı")
+                return fallback_response
+            except Exception as fallback_error:
+                logger.error(f"Fallback model ile de hata oluştu: {str(fallback_error)}")
+        
+        # Son çare: Basit bir hata mesajı döndür
+        if response_format and response_format.get("type") == "json_object":
+            return '{"error": "LLM service unavailable", "fallback": true}'
+        
         raise

@@ -288,7 +288,24 @@ def process_user_reflection(user_id: str, reflection_type: str) -> Dict[str, Any
         Dict: İşlem sonuçları
     """
     try:
-        logger.info(f"Kullanıcı {user_id} için yansıtma işlemi başlatılıyor, tür: {reflection_type}")
+        logger.info(f"Kullanıcı {user_id} için gelişmiş yansıtma işlemi başlatılıyor, tür: {reflection_type}")
+
+        # Gelişmiş analiz bileşenlerini başlat
+        from vira.metacognition.engine import MetaCognitiveEngine
+        from vira.memory.reflector import Reflector
+        from vira.reflection.insight_generator import InsightGenerator
+        
+        # Repository'leri hazırla
+        db_repos = {
+            "memory_repo": memory_repository,
+            "personality_repo": None,  # Şimdilik None, gelecekte eklenebilir
+            "user_repo": user_repository
+        }
+        
+        # Bileşenleri başlat
+        metacognitive_engine = MetaCognitiveEngine(db_repos)
+        reflector = Reflector()
+        insight_generator = InsightGenerator(reflector=reflector)
 
         # Kullanıcının var olup olmadığını kontrol et
         try:
@@ -303,10 +320,12 @@ def process_user_reflection(user_id: str, reflection_type: str) -> Dict[str, Any
         # Kullanıcının geçmiş etkileşimlerini getir
         try:
             memories = memory_repository.get_user_memories(user_id, limit=50)
-            logger.debug(f"Kullanıcı {user_id} için {len(memories) if memories else 0} hafıza kaydı bulundu")
+            conversations = memory_repository.get_conversation_history(user_id, limit=20, days=30)
+            logger.debug(f"Kullanıcı {user_id} için {len(memories) if memories else 0} hafıza kaydı ve {len(conversations) if conversations else 0} konuşma bulundu")
         except Exception as e:
             logger.error(f"Hafıza kayıtları alınırken hata: {str(e)}")
-            memories = []  # Hafıza yoksa boş liste ile devam et
+            memories = []
+            conversations = []
 
         # Yansıtma oturumu oluştur
         try:
@@ -325,39 +344,89 @@ def process_user_reflection(user_id: str, reflection_type: str) -> Dict[str, Any
             logger.error(f"Yansıtma oturumu oluşturulurken hata: {str(e)}")
             return {"error": f"Session creation error: {str(e)}"}
 
-        # Hafıza verilerine dayalı analiz yap
-        memory_count = len(memories) if memories else 0
-        
-        # Örnek içgörüler oluştur (gerçek uygulamada LLM ile analiz yapılır)
-        insights = []
-        if memory_count > 0:
-            insights = [
-                {
+        # Gelişmiş analiz: Kullanıcı mental modeli oluştur
+        try:
+            user_mental_model = metacognitive_engine.build_unified_user_model(user_id)
+            logger.debug(f"Kullanıcı mental modeli oluşturuldu: {user_mental_model.user_id}")
+        except Exception as e:
+            logger.error(f"Mental model oluşturma hatası: {str(e)}")
+            user_mental_model = None
+
+        # Gelişmiş analiz: Desenler çıkar
+        try:
+            # Zamansal desenler
+            temporal_patterns = extract_temporal_patterns(conversations)
+            
+            # Davranışsal desenler
+            behavioral_patterns = extract_behavioral_patterns(conversations, memories)
+            
+            # Duygusal desenler
+            emotional_patterns = reflector.analyze_emotional_patterns(conversations) if conversations else {}
+            
+            logger.debug(f"Desenler çıkarıldı - Temporal: {len(temporal_patterns)}, Behavioral: {len(behavioral_patterns)}, Emotional: {len(emotional_patterns)}")
+        except Exception as e:
+            logger.error(f"Desen çıkarma hatası: {str(e)}")
+            temporal_patterns = {}
+            behavioral_patterns = {}
+            emotional_patterns = {}
+
+        # Gelişmiş içgörü üretimi
+        try:
+            # Zamansal içgörüler
+            temporal_insights = insight_generator.generate_temporal_insights(temporal_patterns)
+            
+            # Davranışsal içgörüler
+            behavioral_insights = insight_generator.generate_behavioral_insights(behavioral_patterns)
+            
+            # Çapraz desen analizi
+            all_patterns = {
+                'temporal': temporal_patterns,
+                'behavioral': behavioral_patterns,
+                'emotional': emotional_patterns
+            }
+            cross_pattern_insights = insight_generator.synthesize_cross_pattern_insights(all_patterns)
+            
+            # Tüm içgörüleri birleştir
+            all_insights = temporal_insights + behavioral_insights
+            
+            # Meta-içgörüleri de ekle
+            for meta_insight in cross_pattern_insights.get('meta_insights', []):
+                all_insights.append({
                     "user_id": user_id,
-                    "insight_text": f"Kullanıcı {memory_count} etkileşim geçmişine sahip ve düzenli olarak sistem kullanıyor",
-                    "insight_type": "behavioral_pattern",
-                    "confidence_score": 0.85
-                },
-                {
-                    "user_id": user_id,
-                    "insight_text": "Kullanıcı çeşitli konularda yardım talep ediyor, proaktif destek faydalı olabilir",
-                    "insight_type": "need_recognition",
-                    "confidence_score": 0.75
-                }
-            ]
-        else:
-            insights = [
-                {
-                    "user_id": user_id,
-                    "insight_text": "Yeni kullanıcı, onboarding ve rehberlik desteği gerekebilir",
-                    "insight_type": "new_user_pattern",
-                    "confidence_score": 0.90
-                }
-            ]
+                    "insight_text": meta_insight,
+                    "insight_type": "meta_insight",
+                    "confidence_score": cross_pattern_insights.get('synthesis_confidence', 0.7)
+                })
+            
+            logger.info(f"Toplam {len(all_insights)} içgörü üretildi")
+            
+        except Exception as e:
+            logger.error(f"İçgörü üretme hatası: {str(e)}")
+            # Fallback içgörüler
+            memory_count = len(memories) if memories else 0
+            all_insights = []
+            if memory_count > 0:
+                all_insights = [
+                    {
+                        "user_id": user_id,
+                        "insight_text": f"Kullanıcı {memory_count} etkileşim geçmişine sahip ve düzenli olarak sistem kullanıyor",
+                        "insight_type": "behavioral_pattern",
+                        "confidence_score": 0.85
+                    }
+                ]
+            else:
+                all_insights = [
+                    {
+                        "user_id": user_id,
+                        "insight_text": "Yeni kullanıcı, onboarding ve rehberlik desteği gerekebilir",
+                        "insight_type": "new_user_pattern",
+                        "confidence_score": 0.90
+                    }
+                ]
 
         # İçgörüleri kaydet
         insight_ids = []
-        for insight in insights:
+        for insight in all_insights:
             try:
                 insight_id = reflection_repository.create_insight(
                     user_id=user_id,
@@ -371,28 +440,48 @@ def process_user_reflection(user_id: str, reflection_type: str) -> Dict[str, Any
             except Exception as e:
                 logger.error(f"İçgörü kaydedilirken hata: {str(e)}")
 
-        # Hedefler oluştur
-        goals = []
-        if memory_count > 0:
-            goals = [
-                {
+        # Gelişmiş hedef oluşturma
+        try:
+            goals = []
+            
+            # Çapraz desen analizinden proaktif aksiyonları hedef olarak kullan
+            proactive_actions = cross_pattern_insights.get('proactive_actions', [])
+            for i, action in enumerate(proactive_actions[:3]):  # En fazla 3 hedef
+                goals.append({
                     "user_id": user_id,
-                    "goal_text": "Kullanıcıya proaktif yardım ve öneriler sunmak",
-                    "goal_type": "proactive_assistance",
-                    "priority": 7,
-                    "source_insight_id": insight_ids[1] if len(insight_ids) > 1 else None
-                }
-            ]
-        else:
-            goals = [
-                {
-                    "user_id": user_id,
-                    "goal_text": "Yeni kullanıcıya rehberlik ve onboarding desteği sağlamak",
-                    "goal_type": "onboarding_support",
-                    "priority": 9,
-                    "source_insight_id": insight_ids[0] if insight_ids else None
-                }
-            ]
+                    "goal_text": action,
+                    "goal_type": "proactive_action",
+                    "priority": 8 - i,  # İlk aksiyon en yüksek öncelik
+                    "source_insight_id": insight_ids[i] if i < len(insight_ids) else None
+                })
+            
+            # Eğer proaktif aksiyon yoksa, fallback hedefler
+            if not goals:
+                memory_count = len(memories) if memories else 0
+                if memory_count > 0:
+                    goals = [
+                        {
+                            "user_id": user_id,
+                            "goal_text": "Kullanıcıya proaktif yardım ve öneriler sunmak",
+                            "goal_type": "proactive_assistance",
+                            "priority": 7,
+                            "source_insight_id": insight_ids[0] if insight_ids else None
+                        }
+                    ]
+                else:
+                    goals = [
+                        {
+                            "user_id": user_id,
+                            "goal_text": "Yeni kullanıcıya rehberlik ve onboarding desteği sağlamak",
+                            "goal_type": "onboarding_support",
+                            "priority": 9,
+                            "source_insight_id": insight_ids[0] if insight_ids else None
+                        }
+                    ]
+                    
+        except Exception as e:
+            logger.error(f"Hedef oluşturma hatası: {str(e)}")
+            goals = []
 
         # Hedefleri kaydet
         goal_ids = []
@@ -428,14 +517,109 @@ def process_user_reflection(user_id: str, reflection_type: str) -> Dict[str, Any
             "insights_generated": len(insight_ids),
             "goals_created": len(goal_ids),
             "reflection_type": reflection_type,
-            "memory_count": memory_count,
+            "memory_count": len(memories) if memories else 0,
+            "conversation_count": len(conversations) if conversations else 0,
+            "patterns_analyzed": {
+                "temporal": len(temporal_patterns),
+                "behavioral": len(behavioral_patterns),
+                "emotional": len(emotional_patterns)
+            },
+            "synthesis_confidence": cross_pattern_insights.get('synthesis_confidence', 0.7) if 'cross_pattern_insights' in locals() else 0.5,
             "timestamp": datetime.now().isoformat()
         }
         
-        logger.info(f"Kullanıcı {user_id} için yansıtma işlemi tamamlandı: {result}")
+        logger.info(f"Kullanıcı {user_id} için gelişmiş yansıtma işlemi tamamlandı: {result}")
         return result
 
     except Exception as e:
         error_msg = f"process_user_reflection kritik hatası: {str(e)}"
         logger.error(error_msg, exc_info=True)
         return {"error": str(e), "user_id": user_id, "timestamp": datetime.now().isoformat()}
+
+def extract_temporal_patterns(conversations: List[Dict]) -> Dict:
+    """Konuşmalardan zamansal desenler çıkarır."""
+    try:
+        patterns = {
+            "hourly_activity": {},
+            "daily_activity": {},
+            "session_patterns": {},
+            "frequency_analysis": {}
+        }
+        
+        if not conversations:
+            return patterns
+        
+        from datetime import datetime
+        
+        for conv in conversations:
+            timestamp_str = conv.get("timestamp", "")
+            if timestamp_str:
+                try:
+                    # Timestamp'i parse et
+                    if isinstance(timestamp_str, str):
+                        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                    else:
+                        timestamp = timestamp_str
+                    
+                    # Saat bazlı aktivite
+                    hour = timestamp.hour
+                    patterns["hourly_activity"][str(hour)] = patterns["hourly_activity"].get(str(hour), 0) + 1
+                    
+                    # Gün bazlı aktivite
+                    day = timestamp.strftime("%A").lower()
+                    patterns["daily_activity"][day] = patterns["daily_activity"].get(day, 0) + 1
+                    
+                except Exception as e:
+                    logger.debug(f"Timestamp parse hatası: {str(e)}")
+                    continue
+        
+        return patterns
+        
+    except Exception as e:
+        logger.error(f"Zamansal desen çıkarma hatası: {str(e)}")
+        return {}
+
+def extract_behavioral_patterns(conversations: List[Dict], memories: List[Dict]) -> Dict:
+    """Konuşma ve hafızalardan davranışsal desenler çıkarır."""
+    try:
+        patterns = {
+            "message_types": {"questions": 0, "statements": 0, "requests": 0},
+            "interaction_frequency": len(conversations) if conversations else 0,
+            "topic_preferences": {},
+            "help_seeking_patterns": {},
+            "session_length": 0,
+            "follow_up_questions": 0,
+            "detailed_responses": 0
+        }
+        
+        if not conversations:
+            return patterns
+        
+        # Mesaj tiplerini analiz et
+        for conv in conversations:
+            content = conv.get("content", conv.get("message", ""))
+            if content:
+                content_lower = content.lower()
+                
+                # Soru mu?
+                if "?" in content or any(word in content_lower for word in ["nasıl", "neden", "ne", "kim", "nerede"]):
+                    patterns["message_types"]["questions"] += 1
+                
+                # Yardım talebi mi?
+                if any(word in content_lower for word in ["yardım", "help", "destek", "çözüm"]):
+                    patterns["message_types"]["requests"] += 1
+                    patterns["help_seeking_patterns"]["general"] = patterns["help_seeking_patterns"].get("general", 0) + 1
+                
+                # Uzun mesaj mı? (detaylı yanıt)
+                if len(content) > 100:
+                    patterns["detailed_responses"] += 1
+        
+        # Ortalama oturum uzunluğu
+        if conversations:
+            patterns["session_length"] = len(conversations)
+        
+        return patterns
+        
+    except Exception as e:
+        logger.error(f"Davranışsal desen çıkarma hatası: {str(e)}")
+        return {}

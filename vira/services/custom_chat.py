@@ -39,7 +39,7 @@ class CustomChatService:
             Generated response text
         """
         try:
-            # Değerleri ayarla
+            # Değerleri ayarla - OpenRouter için model seçimi
             model_to_use = model or self.model_name
             temp_to_use = temperature or 0.5
             tokens_to_use = max_tokens or 3000
@@ -75,4 +75,23 @@ class CustomChatService:
             # Detaylı hata bilgisi
             import traceback
             logger.error(f"Detailed error: {traceback.format_exc()}")
+            
+            # Model bulunamadığında graceful fallback
+            if "model" in str(e).lower() and "not found" in str(e).lower():
+                logger.warning(f"Model {model_to_use} bulunamadı, varsayılan model ile tekrar deneniyor...")
+                try:
+                    # Varsayılan model ile tekrar dene
+                    fallback_completion = self.client.chat.completions.create(
+                        model=self.model_name,  # Varsayılan model
+                        messages=messages,
+                        temperature=temp_to_use,
+                        max_tokens=tokens_to_use,
+                        response_format=resp_format
+                    )
+                    if fallback_completion and fallback_completion.choices:
+                        logger.info("Varsayılan model ile başarılı yanıt alındı")
+                        return fallback_completion.choices[0].message.content
+                except Exception as fallback_error:
+                    logger.error(f"Varsayılan model ile de hata: {fallback_error}")
+            
             return f"API yanıtı alınırken hata oluştu: {str(e)}"
